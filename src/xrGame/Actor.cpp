@@ -2331,7 +2331,9 @@ void CActor::UpdateConditionArtefacts()
 	static u32 _tmr = 0;
 
 	if (_tmr && Device.dwTimeGlobal < _tmr)
+	{
 		return;
+	}
 
 	_tmr = Device.dwTimeGlobal + 2000;
 
@@ -2345,44 +2347,56 @@ void CActor::UpdateConditionArtefacts()
 
 			if (conditions().GetHealth() < 1.0f)
 			{
-				val = artefact->m_fHealthRestoreSpeed;
+				val = artefact->GetHealthPower();
 				if (val > 0.0f)
+				{
 					cond_loss += val * 0.2f;
+				}
 			}
 
 			if (conditions().GetRadiation() > 0.0f)
 			{
-				val = artefact->m_fRadiationRestoreSpeed;
+				val = artefact->GetRadiationPower();
 				if (val < 0.0f)
+				{
 					cond_loss += abs(val) * 0.2f;
+				}
 			}
 
 			if (conditions().GetSatiety() < 1.0f)
 			{
-				val = artefact->m_fSatietyRestoreSpeed;
+				val = artefact->GetSatietyPower();
 				if (val > 0.0f)
+				{
 					cond_loss += val * 0.2f;
+				}
 			}
 
 			if (conditions().GetThirst() < 1.0f)
 			{
-				val = artefact->m_fThirstRestoreSpeed;
+				val = artefact->GetThirstPower();
 				if (val > 0.0f)
+				{
 					cond_loss += val * 0.2f;
+				}
 			}
 
 			if (conditions().GetPower() < 1.0f)
 			{
-				val = artefact->m_fPowerRestoreSpeed;
+				val = artefact->GetPowerPower();
 				if (val > 0.0f)
+				{
 					cond_loss += val * 0.2f;
+				}
 			}
 
 			if (conditions().BleedingSpeed() > 0.0f)
 			{
-				val = artefact->m_fBleedingRestoreSpeed;
+				val = artefact->GetBleedingPower();
 				if (val > 0.0f)
+				{
 					cond_loss += val * 0.2f;
+				}
 			}
 
 			val = artefact->AdditionalInventoryWeight();
@@ -3269,25 +3283,28 @@ void CActor::UpdateArtefactsOnBeltAndOutfit()
 		if (CArtefact* artefact = item->cast_artefact())
 		{
 			float art_cond = artefact->GetCondition();
-			conditions().ChangeBleeding((artefact->m_fBleedingRestoreSpeed * art_cond) * f_update_time);
-			conditions().ChangeHealth((artefact->m_fHealthRestoreSpeed * art_cond) * f_update_time);
-			conditions().ChangePower((artefact->m_fPowerRestoreSpeed * art_cond) * f_update_time);
-			conditions().ChangeSatiety((artefact->m_fSatietyRestoreSpeed * art_cond) * f_update_time);
-			conditions().ChangeThirst((artefact->m_fThirstRestoreSpeed * art_cond) * f_update_time);
+			conditions().ChangeBleeding((artefact->GetBleedingPower() * art_cond) * f_update_time);
+			conditions().ChangeHealth((artefact->GetHealthPower() * art_cond) * f_update_time);
+			conditions().ChangePower((artefact->GetPowerPower() * art_cond) * f_update_time);
+			conditions().ChangeSatiety((artefact->GetSatietyPower() * art_cond) * f_update_time);
+			conditions().ChangeThirst((artefact->GetThirstPower() * art_cond) * f_update_time);
 			if (enableSleepiness)
 			{
-				conditions().ChangeSleepiness((artefact->m_fSleepinessRestoreSpeed * art_cond) * f_update_time);
+				conditions().ChangeSleepiness((artefact->GetSleepinessPower() * art_cond) * f_update_time);
 			}
 
-			if ((artefact->m_fRadiationRestoreSpeed * art_cond) > 0.0f)
 			{
-				float val = (artefact->m_fRadiationRestoreSpeed * art_cond) - conditions().GetBoostRadiationImmunity();
-				clamp(val, 0.0f, val);
-				conditions().ChangeRadiation(val * f_update_time);
-			}
-			else
-			{
-				conditions().ChangeRadiation((artefact->m_fRadiationRestoreSpeed * art_cond) * f_update_time);
+				auto RadiationPower = artefact->GetRadiationPower();
+				if ((RadiationPower * art_cond) > 0.0f)
+				{
+					float val = (RadiationPower * art_cond) - conditions().GetBoostRadiationImmunity();
+					clamp(val, 0.0f, val);
+					conditions().ChangeRadiation(val * f_update_time);
+				}
+				else
+				{
+					conditions().ChangeRadiation((RadiationPower * art_cond) * f_update_time);
+				}
 			}
 		}
 	}
@@ -3321,12 +3338,14 @@ float CActor::HitArtefactsOnBelt(float hit_power, ALife::EHitType hit_type)
 	{
 		if (CArtefact* artefact = item->cast_artefact())
 		{
-			sum += (artefact->m_ArtefactHitImmunities.AffectHit(1.0f, hit_type) * artefact->GetCondition());
+			sum += (artefact->AffectHit(1.0f, hit_type) * artefact->GetCondition());
 		}
 	}
 
 	if (sum == 0.0f)
+	{
 		return hit_power;
+	}
 
 	clamp(sum, -0.99f, 0.99f);
 
@@ -3370,7 +3389,7 @@ float CActor::GetProtection_ArtefactsOnBelt(ALife::EHitType hit_type)
 	{
 		if (CArtefact* artefact = item->cast_artefact())
 		{
-			sum += (artefact->m_ArtefactHitImmunities.AffectHit(1.0f, hit_type) * artefact->GetCondition());
+			sum += (artefact->AffectHit(1.0f, hit_type) * artefact->GetCondition());
 		}
 	}
 
@@ -3604,7 +3623,7 @@ float CActor::GetRestoreSpeed( ALife::EConditionRestoreType const& type )
 		{
 			if (CArtefact* artefact = item->cast_artefact())
 			{
-				res += (artefact->m_fHealthRestoreSpeed * artefact->GetCondition());
+				res += (artefact->GetHealthPower() * artefact->GetCondition());
 			}
 		}
 
@@ -3625,7 +3644,7 @@ float CActor::GetRestoreSpeed( ALife::EConditionRestoreType const& type )
 		{
 			if (CArtefact* artefact = item->cast_artefact())
 			{
-				res += (artefact->m_fRadiationRestoreSpeed * artefact->GetCondition());
+				res += (artefact->GetRadiationPower() * artefact->GetCondition());
 			}
 		}
 
@@ -3648,7 +3667,7 @@ float CActor::GetRestoreSpeed( ALife::EConditionRestoreType const& type )
 		{
 			if (CArtefact* artefact = item->cast_artefact())
 			{
-				res += (artefact->m_fSatietyRestoreSpeed * artefact->GetCondition());
+				res += (artefact->GetSatietyPower() * artefact->GetCondition());
 			}
 		}
 
@@ -3671,7 +3690,7 @@ float CActor::GetRestoreSpeed( ALife::EConditionRestoreType const& type )
 		{
 			if (CArtefact* artefact = item->cast_artefact())
 			{
-				res += (artefact->m_fThirstRestoreSpeed * artefact->GetCondition());
+				res += (artefact->GetThirstPower() * artefact->GetCondition());
 			}
 		}
 
@@ -3694,7 +3713,7 @@ float CActor::GetRestoreSpeed( ALife::EConditionRestoreType const& type )
 		{
 			if (CArtefact* artefact = item->cast_artefact())
 			{
-				res += (artefact->m_fPowerRestoreSpeed * artefact->GetCondition());
+				res += (artefact->GetPowerPower() * artefact->GetCondition());
 			}
 		}
 
@@ -3727,7 +3746,7 @@ float CActor::GetRestoreSpeed( ALife::EConditionRestoreType const& type )
 		{
 			if (CArtefact* artefact = item->cast_artefact())
 			{
-				res += (artefact->m_fBleedingRestoreSpeed * artefact->GetCondition());
+				res += (artefact->GetBleedingPower() * artefact->GetCondition());
 			}
 		}
 
