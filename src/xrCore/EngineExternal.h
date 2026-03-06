@@ -68,6 +68,7 @@ enum class EEngineExternalGame
 	EnablePolterStaminaLooseOnHit,
 	EnablePolterDrop,
 	EnableWindEffectOnABullet,
+	EnableRagdolledZombiePseudodeath,
 	None
 };
 
