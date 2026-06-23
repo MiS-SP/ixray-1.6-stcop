@@ -531,14 +531,14 @@ void CDemoRecord::UpdateLookAtPoint()
 
 void CDemoRecord::UpdateFreeLook()
 {
-	if (rq_result.O != nullptr)
+	if (!rq_result.IsStatic())
 	{
-		if (IKinematics* kinematics = rq_result.O->Visual()->dcast_PKinematics(); kinematics != nullptr && draw_skeleton)
+		if (IKinematics* kinematics = rq_result.GetDynamic()->Visual()->dcast_PKinematics(); kinematics != nullptr && draw_skeleton)
 		{
 			Flags32 old_flags = HUD().world_prims.m_skeleton_flags;
 
 			HUD().world_prims.m_skeleton_flags.set(LevelInspector::ESI_BONES | LevelInspector::ESI_BONES_LINKS, TRUE);
-			HUD().world_prims.DrawSkeleton(kinematics, rq_result.O->XFORM());
+			HUD().world_prims.DrawSkeleton(kinematics, rq_result.GetDynamic()->XFORM());
 
 			HUD().world_prims.m_skeleton_flags = old_flags;
 		}
@@ -608,13 +608,13 @@ void CDemoRecord::IR_OnKeyboardPress(int dik)
 		}
 		else
 		{
-			if (rq_result.O != nullptr)
+			if (!rq_result.IsStatic())
 			{
-				if (IRenderVisual* v = rq_result.O->Visual())
+				if (IRenderVisual* v = rq_result.GetDynamic()->Visual())
 				{
 					if (IKinematics* k = v->dcast_PKinematics())
 					{
-						bone_holder = rq_result.O;
+						bone_holder = const_cast<CObject*>(rq_result.GetDynamic());
 						bone_holder_kinematics = k;
 						bone_id = (u16)rq_result.element;
 
@@ -654,13 +654,13 @@ void CDemoRecord::IR_OnKeyboardPress(int dik)
 			{
 				Fvector current_eulers;
 
-				if (rq_result.O != nullptr)
+				if (!rq_result.IsStatic())
 				{
-					if (IRenderVisual* v = rq_result.O->Visual())
+					if (IRenderVisual* v = rq_result.GetDynamic()->Visual())
 					{
 						if (IKinematics* k = v->dcast_PKinematics())
 						{
-							bone_holder = rq_result.O;
+							bone_holder = const_cast<CObject*>(rq_result.GetDynamic());
 							bone_holder_kinematics = k;
 							bone_id = (u16)rq_result.element;
 						}
