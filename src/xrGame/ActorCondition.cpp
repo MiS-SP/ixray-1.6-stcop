@@ -14,7 +14,7 @@
 #include "game_object_space.h"
 #include "object_broker.h"
 #include "Weapon.h"
-
+#include "ActorHelmet.h"
 #include "PDA.h"
 #include "ai/monsters/basemonster/base_monster.h"
 #include "UIGameCustom.h"
@@ -1149,20 +1149,20 @@ float CActorCondition::GetHealthBoost()
 	float total = 0.0f;
 
 	float satiety_health_koef = (Satiety.Current - Satiety.Critical) / (Satiety.Current >= Satiety.Critical ? 1 - Satiety.Critical : Satiety.Critical);
-	total += Satiety.HealthBoost * satiety_health_koef * m_fDeltaTime;
+	total += Satiety.HealthBoost * satiety_health_koef;
 
 	const static bool enableThirst = EngineExternal()[EEngineExternalGame::EnableThirst];
 	if (enableThirst)
 	{
 		float thirst_health_koef = (Thirst.Current - Thirst.Critical) / (Thirst.Current >= Thirst.Critical ? 1 - Thirst.Critical : Thirst.Critical);
-		total += Thirst.HealthBoost * thirst_health_koef * m_fDeltaTime;
+		total += Thirst.HealthBoost * thirst_health_koef;
 	}
 
 	const static bool enableSleepiness = EngineExternal()[EEngineExternalGame::EnableSleepiness];
 	if (enableSleepiness)
 	{
 		float SleepinessHealthKoef = ((1.f - Sleepiness.Current) - Sleepiness.Critical) / (Sleepiness.Current < Sleepiness.Critical ? 1 - Sleepiness.Critical : Sleepiness.Critical);
-		total += Sleepiness.HealthBoost * SleepinessHealthKoef * m_fDeltaTime;
+		total += Sleepiness.HealthBoost * SleepinessHealthKoef;
 	}
 
 	//const static bool enableMedIntoxication = EngineExternal()[EEngineExternalGame::EnableMedIntoxication];
@@ -1182,10 +1182,28 @@ float CActorCondition::GetHealthBoost()
 	//		healthMul = 2.5f;
 	//	}
 
-	//	total += Intoxication.HealthBoost * excess * healthMul * m_fDeltaTime;
+	//	total += Intoxication.HealthBoost * excess * healthMul;
 	//}
 
-	total += m_fDeltaTime * (m_change_v.m_fV_HealthRestore + m_fBoostHpRestore);
+	total += (m_change_v.m_fV_HealthRestore + m_fBoostHpRestore);
+
+	for (const PIItem item : object().inventory().m_belt)
+	{
+		if (CArtefact* artefact = item->cast_artefact())
+		{
+			float art_cond = artefact->GetCondition();
+			total += (artefact->m_fHealthRestoreSpeed * art_cond);
+		}
+	}
+
+	if (CCustomOutfit* outfit = object().GetOutfit())
+	{
+		total += outfit->m_fHealthRestoreSpeed;
+	}
+	if (CHelmet* helmet = object().GetHelmet())
+	{
+		total += helmet->m_fHealthRestoreSpeed;
+	}
 
 	return total;
 }
