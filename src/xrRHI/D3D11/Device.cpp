@@ -12,6 +12,47 @@
 
 #define DX11Device ((ID3D11Device*)RawDevice)
 
+static void LogWindowState(const char* Tag, HWND Wnd)
+{
+	RECT Client = {};
+	RECT Window = {};
+	GetClientRect(Wnd, &Client);
+	GetWindowRect(Wnd, &Window);
+
+	Msg("~ [11on12] %s: hwnd 0x%p visible %d iconic %d client %dx%d window %dx%d at %d,%d",
+		Tag, (void*)Wnd, (int)IsWindowVisible(Wnd), (int)IsIconic(Wnd),
+		int(Client.right - Client.left), int(Client.bottom - Client.top),
+		int(Window.right - Window.left), int(Window.bottom - Window.top),
+		int(Window.left), int(Window.top));
+}
+
+static void LogSwapChainState(const char* Tag, IDXGISwapChain* SwapChain)
+{
+	if (SwapChain == nullptr)
+	{
+		Msg("~ [11on12] %s: swapchain is null", Tag);
+		return;
+	}
+
+	DXGI_SWAP_CHAIN_DESC Desc = {};
+	HRESULT Hr = SwapChain->GetDesc(&Desc);
+
+	BOOL Fullscreen = FALSE;
+	IDXGIOutput* Output = nullptr;
+	HRESULT FsHr = SwapChain->GetFullscreenState(&Fullscreen, &Output);
+
+	if (Output != nullptr)
+	{
+		Output->Release();
+	}
+
+	Msg("~ [11on12] %s: GetDesc 0x%08x buffers %ux%u fmt %d count %u effect %d flags 0x%x windowed %d | GetFullscreenState 0x%08x fullscreen %d",
+		Tag, Hr, Desc.BufferDesc.Width, Desc.BufferDesc.Height, (int)Desc.BufferDesc.Format,
+		Desc.BufferCount, (int)Desc.SwapEffect, Desc.Flags, (int)Desc.Windowed, FsHr, (int)Fullscreen);
+
+	LogWindowState(Tag, Desc.OutputWindow);
+}
+
 InternalDevice11::InternalDevice11()
 {
 	CreateD3D11();
@@ -63,6 +104,15 @@ bool InternalDevice11::UpdateBuffersD3D11()
 	if (pBuffer == nullptr)
 	{
 		return false;
+	}
+
+	{
+		D3D11_TEXTURE2D_DESC BackDesc = {};
+		pBuffer->GetDesc(&BackDesc);
+		Msg("~ [11on12] UpdateBuffers: backbuffer %ux%u fmt %d | psCurrentVidMode %ux%u | RenderScale %f",
+			BackDesc.Width, BackDesc.Height, (int)BackDesc.Format,
+			psCurrentVidMode[0], psCurrentVidMode[1], RenderScale);
+		LogSwapChainState("UpdateBuffers", HWSwapchain);
 	}
 
 	ID3D11RenderTargetView* SwapChainRaw = nullptr;
@@ -285,6 +335,13 @@ HRESULT WINAPI D3D11CreateDeviceFake(IDXGIAdapter* pAdapter, D3D_DRIVER_TYPE Dri
 
 	result = D3D11On12CreateDevice(FAke_d3d12device, Flags, pFeatureLevels, FeatureLevels, (IUnknown**)&Fake_d3d12queue, 1, 0, ppDevice, ppImmediateContext, pFeatureLevel);
 
+	Msg("~ [11on12] D3D11On12CreateDevice 0x%08x flags 0x%x levels %u chosen 0x%x device 0x%p",
+		result, Flags, FeatureLevels, pFeatureLevel ? (int)*pFeatureLevel : 0, (void*)(ppDevice ? *ppDevice : nullptr));
+
+	if (FAILED(result))
+	{
+		return result;
+	}
 
 	HRESULT hr = FAke_d3d12device->CreateCommandAllocator(
 		D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -363,8 +420,18 @@ HRESULT WINAPI D3D11CreateDeviceAndSwapChainFake(IDXGIAdapter* pAdapter, D3D_DRI
 			return E_INVALIDARG;
 
 		DXGI_SWAP_CHAIN_DESC desc = *pSwapChainDesc;
+
+		Msg("~ [11on12] CreateSwapChain request: %ux%u fmt %d count %u effect %d flags 0x%x windowed %d refresh %u/%u",
+			desc.BufferDesc.Width, desc.BufferDesc.Height, (int)desc.BufferDesc.Format, desc.BufferCount,
+			(int)desc.SwapEffect, desc.Flags, (int)desc.Windowed,
+			desc.BufferDesc.RefreshRate.Numerator, desc.BufferDesc.RefreshRate.Denominator);
+		LogWindowState("CreateSwapChain window", desc.OutputWindow);
+
 		result = dxgiFactory->CreateSwapChain(d3d11Device, &desc, ppSwapChain);
 		dxgiFactory->Release();
+
+		Msg("~ [11on12] CreateSwapChain 0x%08x", result);
+		LogSwapChainState("after CreateSwapChain", ppSwapChain ? *ppSwapChain : nullptr);
 
 		if (result != S_OK)
 			return result;
@@ -551,11 +618,18 @@ void InternalDevice11::ResizeBuffers(u32 Width, u32 Height)
 	Desc.RefreshRate.Numerator = 0;
 	Desc.RefreshRate.Denominator = 0;
 
+	Msg("~ [11on12] ResizeBuffers request %ux%u", Width, Height);
+	LogSwapChainState("before ResizeBuffers", (IDXGISwapChain*)HWSwapchain);
+
 	HRESULT R = ((IDXGISwapChain*)HWSwapchain)->ResizeTarget(&Desc);
+	Msg("~ [11on12] ResizeTarget 0x%08x", R);
 	R_CHK(R);
 
 	R = ((IDXGISwapChain*)HWSwapchain)->ResizeBuffers(0, Width, Height, DXGI_FORMAT_UNKNOWN, DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH);
+	Msg("~ [11on12] ResizeBuffers 0x%08x", R);
 	R_CHK(R);
+
+	LogSwapChainState("after ResizeBuffers", (IDXGISwapChain*)HWSwapchain);
 
 	UpdateBuffersD3D11();
 }
@@ -685,7 +759,15 @@ void InternalDevice11::DestroyD3D11()
 
 void InternalDevice11::Present()
 {
-	HWSwapchain->Present(psDeviceFlags.test(rsVSync) ? 1 : 0, 0);
+	HRESULT R = HWSwapchain->Present(psDeviceFlags.test(rsVSync) ? 1 : 0, 0);
+
+	static HRESULT LastPresent = S_FALSE;
+	if (R != LastPresent)
+	{
+		LastPresent = R;
+		Msg("~ [11on12] Present 0x%08x", R);
+		LogSwapChainState("Present", HWSwapchain);
+	}
 }
 
 void InternalDevice11::CopySurface(IRHISurface* Dest, IRHISurface* Source)
