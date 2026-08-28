@@ -4,6 +4,7 @@
 #ifdef IXR_WINDOWS
 #	include "../Drivers/AMDGPUTransferee.h"
 #endif
+#include <d3d11on12.h>
 
 #ifndef _countof
 #	define _countof(array) (sizeof(array) / sizeof(array[0]))
@@ -235,6 +236,153 @@ void CreateRDoc()
 }
 #endif
 
+RHI_API ID3D12Fence* FakeFence = nullptr;
+RHI_API ID3D12Device* FAke_d3d12device = nullptr;
+RHI_API ID3D12CommandQueue* Fake_d3d12queue = nullptr;
+RHI_API ID3D11On12Device2* FAke_d3d11on12device = nullptr;
+
+RHI_API ID3D12CommandAllocator* FAke_d3d12allocator = nullptr;
+RHI_API ID3D12GraphicsCommandList* FAke_d3d12commandList = nullptr;
+
+HRESULT WINAPI D3D11CreateDeviceFake(IDXGIAdapter* pAdapter, D3D_DRIVER_TYPE DriverType, HMODULE Software, UINT Flags, const D3D_FEATURE_LEVEL* pFeatureLevels, UINT FeatureLevels, UINT SDKVersion, ID3D11Device** ppDevice, D3D_FEATURE_LEVEL* pFeatureLevel, ID3D11DeviceContext** ppImmediateContext)
+{
+
+	HRESULT result;
+
+	bool ok = false;
+
+	for (size_t i = 0; i < FeatureLevels; i++)
+	{
+		result = D3D12CreateDevice(pAdapter, pFeatureLevels[i], IID_PPV_ARGS(&FAke_d3d12device));
+
+		if (result == S_OK)
+		{
+			ok = true;
+			break;
+		}
+	}
+
+	if (!ok)
+	{
+		return result;
+	}
+
+	if (FAke_d3d12device == nullptr)
+		return E_NOINTERFACE;
+
+	D3D12_COMMAND_QUEUE_DESC desc;
+	desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+	desc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_HIGH;
+	desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+	desc.NodeMask = 0;
+
+	result = FAke_d3d12device->CreateCommandQueue(&desc, IID_PPV_ARGS(&Fake_d3d12queue));
+
+	if (result != S_OK)
+	{
+		return result;
+	}
+
+	result = D3D11On12CreateDevice(FAke_d3d12device, Flags, pFeatureLevels, FeatureLevels, (IUnknown**)&Fake_d3d12queue, 1, 0, ppDevice, ppImmediateContext, pFeatureLevel);
+
+
+	HRESULT hr = FAke_d3d12device->CreateCommandAllocator(
+		D3D12_COMMAND_LIST_TYPE_DIRECT,
+		IID_PPV_ARGS(&FAke_d3d12allocator));
+
+	if (FAILED(hr))
+		return hr;
+
+	hr = FAke_d3d12device->CreateCommandList(
+		0,
+		D3D12_COMMAND_LIST_TYPE_DIRECT,
+		FAke_d3d12allocator,
+		nullptr,
+		IID_PPV_ARGS(&FAke_d3d12commandList));
+
+	if (FAILED(hr))
+		return hr;
+
+	hr = (*ppDevice)->QueryInterface(
+		__uuidof(ID3D11On12Device2),
+		reinterpret_cast<void**>(&FAke_d3d11on12device));
+
+	if (FAILED(hr))
+		return hr;
+
+	hr = FAke_d3d12device->CreateFence(
+		0,
+		D3D12_FENCE_FLAG_NONE,
+		IID_PPV_ARGS(&FakeFence));
+
+	if (FAILED(hr))
+		return hr;
+
+	//d3d12device->Release();
+
+	return result;
+}
+
+
+HRESULT WINAPI D3D11CreateDeviceAndSwapChainFake(IDXGIAdapter* pAdapter, D3D_DRIVER_TYPE DriverType, HMODULE Software, UINT Flags, const D3D_FEATURE_LEVEL* pFeatureLevels, UINT FeatureLevels, UINT SDKVersion, const DXGI_SWAP_CHAIN_DESC* pSwapChainDesc, IDXGISwapChain** ppSwapChain, ID3D11Device** ppDevice, D3D_FEATURE_LEVEL* pFeatureLevel, ID3D11DeviceContext** ppImmediateContext)
+{
+	if (ppSwapChain && !pSwapChainDesc)
+		return E_INVALIDARG;
+
+	HRESULT result;
+
+	if (ppSwapChain && !pSwapChainDesc)
+		return E_INVALIDARG;
+
+	ID3D11Device* d3d11Device;
+	ID3D11DeviceContext* d3d11Context;
+
+	result = D3D11CreateDeviceFake(pAdapter, DriverType, Software, Flags, pFeatureLevels, FeatureLevels, SDKVersion, &d3d11Device, pFeatureLevel, &d3d11Context);
+
+	if (ppSwapChain)
+	{
+		IDXGIDevice* dxgiDevice = nullptr;
+		IDXGIAdapter* dxgiAdapter = nullptr;
+		IDXGIFactory* dxgiFactory = nullptr;
+
+		result = d3d11Device->QueryInterface(IID_PPV_ARGS(&dxgiDevice));
+
+		if (result != S_OK)
+			return E_INVALIDARG;
+
+		result = dxgiDevice->GetParent(IID_PPV_ARGS(&dxgiAdapter));
+		dxgiDevice->Release();
+
+		if (result != S_OK)
+			return E_INVALIDARG;
+
+		result = dxgiAdapter->GetParent(IID_PPV_ARGS(&dxgiFactory));
+		dxgiAdapter->Release();
+
+		if (result != S_OK)
+			return E_INVALIDARG;
+
+		DXGI_SWAP_CHAIN_DESC desc = *pSwapChainDesc;
+		result = dxgiFactory->CreateSwapChain(d3d11Device, &desc, ppSwapChain);
+		dxgiFactory->Release();
+
+		if (result != S_OK)
+			return result;
+	}
+
+	if (ppDevice != nullptr)
+		*ppDevice = d3d11Device;
+	else
+		d3d11Device->Release();
+
+	if (ppImmediateContext != nullptr)
+		*ppImmediateContext = d3d11Context;
+	else
+		d3d11Context->Release();
+
+	return S_OK;
+}
+#pragma comment(lib, "d3d12.lib")
 bool InternalDevice11::CreateD3D11()
 {
 #if 0
@@ -284,6 +432,7 @@ bool InternalDevice11::CreateD3D11()
 
 		const D3D_FEATURE_LEVEL pFeatureLevels[] =
 		{
+			D3D_FEATURE_LEVEL_12_2,
 			D3D_FEATURE_LEVEL_11_1,
 			D3D_FEATURE_LEVEL_11_0,
 			D3D_FEATURE_LEVEL_10_1
@@ -291,7 +440,7 @@ bool InternalDevice11::CreateD3D11()
 
 		D3D_FEATURE_LEVEL CurLevel;
 
-		HRESULT R = D3D11CreateDeviceAndSwapChain
+		HRESULT R = D3D11CreateDeviceAndSwapChainFake
 		(
 			0, D3D_DRIVER_TYPE_HARDWARE, nullptr, createDeviceFlags, pFeatureLevels,
 			std::size(pFeatureLevels), D3D11_SDK_VERSION, &sd, &HWSwapchain,
@@ -300,7 +449,7 @@ bool InternalDevice11::CreateD3D11()
 		FeatureLevel = CurLevel;
 
 		// main anotation
-		if (FeatureLevel == D3D_FEATURE_LEVEL_11_1)
+		if (FeatureLevel >= D3D_FEATURE_LEVEL_11_1)
 		{
 			R_CHK(HWRenderContext->QueryInterface(__uuidof(ID3DUserDefinedAnnotation), (void**)&g_pAnnotation));
 		}

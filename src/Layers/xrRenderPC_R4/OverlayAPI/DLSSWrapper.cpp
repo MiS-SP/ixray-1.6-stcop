@@ -1,8 +1,15 @@
 #include "stdafx.h"
+#include <d3d11on12.h>
 
 #include "DLSSWrapper.h"
 
 DLSSWrapper g_DLSSWrapper;
+extern RHI_API ID3D12Fence* FakeFence;
+extern RHI_API ID3D12Device* FAke_d3d12device;
+extern RHI_API ID3D12CommandQueue* Fake_d3d12queue;
+extern RHI_API ID3D12CommandAllocator* FAke_d3d12allocator;
+extern RHI_API ID3D12GraphicsCommandList* FAke_d3d12commandList;
+extern RHI_API ID3D11On12Device2* FAke_d3d11on12device;
 
 extern ENGINE_API u32 ps_render_scale_preset;
 extern ENGINE_API float ps_render_scale;
@@ -50,7 +57,7 @@ void DLSSWrapper::Create()
 
 	if (!DLSSInited)
 	{
-		Result = NVSDK_NGX_D3D11_Init(1602, L"", RDevice);
+		Result = NVSDK_NGX_D3D12_Init(1602, L"", FAke_d3d12device);
 
 		if (Result != NVSDK_NGX_Result_Success)
 		{
@@ -60,7 +67,7 @@ void DLSSWrapper::Create()
 		DLSSInited = true;
 	}
 
-	Result = NVSDK_NGX_D3D11_GetCapabilityParameters(&NgxParameters);
+	Result = NVSDK_NGX_D3D12_GetCapabilityParameters(&NgxParameters);
 
 	if (Result != NVSDK_NGX_Result_Success)
 	{
@@ -80,7 +87,7 @@ void DLSSWrapper::Create()
 
 	if (!DlssAvailable)
 	{
-		NVSDK_NGX_D3D11_DestroyParameters(NgxParameters);
+		NVSDK_NGX_D3D12_DestroyParameters(NgxParameters);
 		NgxParameters = nullptr;
 		return;
 	}
@@ -214,7 +221,7 @@ void DLSSWrapper::Resize(const ContextParameters& Parameters)
 	DLSSCreateParams.InFeatureCreateFlags |= NVSDK_NGX_DLSS_Feature_Flags_MVLowRes;
 	DLSSCreateParams.InFeatureCreateFlags |= NVSDK_NGX_DLSS_Feature_Flags_AutoExposure;
 
-	NVSDK_NGX_Result Result = NGX_D3D11_CREATE_DLSS_EXT(RContext, &Handle, NgxParameters, &DLSSCreateParams);
+	NVSDK_NGX_Result Result = NGX_D3D12_CREATE_DLSS_EXT(FAke_d3d12commandList, 0, 0, &Handle, NgxParameters, &DLSSCreateParams);
 
 	if (Result != NVSDK_NGX_Result_Success)
 	{
@@ -230,26 +237,26 @@ void DLSSWrapper::Destroy()
 #ifdef IXR_X64
 	if (Handle != nullptr)
 	{
-		NVSDK_NGX_D3D11_ReleaseFeature(Handle);
+		NVSDK_NGX_D3D12_ReleaseFeature(Handle);
 		Handle = nullptr;
 	}
 
 	if (NgxParameters != nullptr)
 	{
-		NVSDK_NGX_D3D11_DestroyParameters(NgxParameters);
+		NVSDK_NGX_D3D12_DestroyParameters(NgxParameters);
 		NgxParameters = nullptr;
 	}
 
 	if (DLSSInited)
 	{
-		NVSDK_NGX_D3D11_Shutdown1(nullptr);
+		NVSDK_NGX_D3D12_Shutdown1(nullptr);
 		DLSSInited = false;
 	}
 
 	Created = false;	
 #endif
 }
-
+UINT64 FakeFenceValue = 0;
 bool DLSSWrapper::Draw(const DrawParameters& params)
 {
 	if(!Created)
@@ -259,14 +266,32 @@ bool DLSSWrapper::Draw(const DrawParameters& params)
 	}
 
 #ifdef IXR_X64
-	NVSDK_NGX_D3D11_DLSS_Eval_Params DLSSEvalParams = {};
+	NVSDK_NGX_D3D12_DLSS_Eval_Params DLSSEvalParams = {};
 
-	DLSSEvalParams.Feature.pInColor = params.unresolvedColorResource;
-	DLSSEvalParams.Feature.pInOutput = params.resolvedColorResource;
+	RContext->Flush();
+
+	R_CHK(FAke_d3d11on12device->UnwrapUnderlyingResource(
+		params.unresolvedColorResource, Fake_d3d12queue,
+		IID_PPV_ARGS(&DLSSEvalParams.Feature.pInColor)));
+
+	R_CHK(FAke_d3d11on12device->UnwrapUnderlyingResource(
+		params.resolvedColorResource, Fake_d3d12queue,
+		IID_PPV_ARGS(&DLSSEvalParams.Feature.pInOutput)));
+
+	R_CHK(FAke_d3d11on12device->UnwrapUnderlyingResource(
+		params.depthbufferResource, Fake_d3d12queue,
+		IID_PPV_ARGS(&DLSSEvalParams.pInDepth)));
+
+	R_CHK(FAke_d3d11on12device->UnwrapUnderlyingResource(
+		params.motionvectorResource, Fake_d3d12queue,
+		IID_PPV_ARGS(&DLSSEvalParams.pInMotionVectors)));
+
+//	DLSSEvalParams.Feature.pInColor = params.unresolvedColorResource;
+	//DLSSEvalParams.Feature.pInOutput = params.resolvedColorResource;
 	DLSSEvalParams.Feature.InSharpness = params.sharpness;
 
-	DLSSEvalParams.pInDepth = params.depthbufferResource;
-	DLSSEvalParams.pInMotionVectors = params.motionvectorResource;
+	//DLSSEvalParams.pInDepth = params.depthbufferResource;
+	//DLSSEvalParams.pInMotionVectors = params.motionvectorResource;
 
 	DLSSEvalParams.InRenderSubrectDimensions.Width = params.renderWidth;
 	DLSSEvalParams.InRenderSubrectDimensions.Height = params.renderHeight;
@@ -279,10 +304,74 @@ bool DLSSWrapper::Draw(const DrawParameters& params)
 	DLSSEvalParams.InMVScaleX = -(float)params.renderWidth * 0.5f;
 	DLSSEvalParams.InMVScaleY = (float)params.renderHeight * 0.5f;
 
-	DLSSEvalParams.pInTransparencyMask = params.transparencyAndCompositionResource;
+	//DLSSEvalParams.pInTransparencyMask = params.transparencyAndCompositionResource;
 	DLSSEvalParams.InFrameTimeDeltaInMsec = params.frameTimeDelta;
 	
-	NVSDK_NGX_Result Result = NGX_D3D11_EVALUATE_DLSS_EXT(RContext, Handle, NgxParameters, &DLSSEvalParams);
+	NVSDK_NGX_Result Result = NGX_D3D12_EVALUATE_DLSS_EXT(FAke_d3d12commandList, Handle, NgxParameters, &DLSSEvalParams);
+
+	// command list должен быть выполнен
+	(FAke_d3d12commandList->Close());
+	
+	ID3D12CommandList* lists[] =
+	{
+		FAke_d3d12commandList
+	};
+	
+	Fake_d3d12queue->ExecuteCommandLists(
+		1,
+		lists);
+
+
+	// signal
+	const UINT64 fenceValue =
+		++FakeFenceValue;
+
+	R_CHK(
+		Fake_d3d12queue->Signal(
+			FakeFence,
+			fenceValue));
+
+
+	ID3D12Fence* fences[] =
+	{
+		FakeFence
+	};
+
+	UINT64 values[] =
+	{
+		fenceValue
+	};
+
+	// возвращаем ВСЕ ресурсы
+	R_CHK(
+		FAke_d3d11on12device->ReturnUnderlyingResource(
+			params.unresolvedColorResource,
+			1,
+			values,
+			fences));
+
+	R_CHK(
+		FAke_d3d11on12device->ReturnUnderlyingResource(
+			params.resolvedColorResource,
+			1,
+			values,
+			fences));
+
+	R_CHK(
+		FAke_d3d11on12device->ReturnUnderlyingResource(
+			params.depthbufferResource,
+			1,
+			values,
+			fences));
+
+	R_CHK(
+		FAke_d3d11on12device->ReturnUnderlyingResource(
+			params.motionvectorResource,
+			1,
+			values,
+			fences));
+
+	FAke_d3d12commandList->Reset(FAke_d3d12allocator, nullptr);
 
 	if(Result != NVSDK_NGX_Result_Success)
 	{

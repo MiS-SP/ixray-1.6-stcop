@@ -14,6 +14,14 @@
 #	define NO_MULTI_INSTANCES
 #endif
 
+extern "C" 
+{
+	__declspec(dllexport) extern const uint32_t D3D12SDKVersion;
+	const uint32_t D3D12SDKVersion = 619;
+	__declspec(dllexport) extern const char* D3D12SDKPath;
+	const char* D3D12SDKPath = ".\\";
+}
+
 int CApplication::Run()
 {
 	// Check for another instance
