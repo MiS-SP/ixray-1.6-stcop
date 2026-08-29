@@ -52,6 +52,12 @@ void CHudItem::Load(const char* section)
 	m_fLookOutSpeedKoef = READ_IF_EXISTS(pSettings, r_float, hud_sect, "lookout_speed_koef", 1.0f);
 	m_fLookOutAmplK = READ_IF_EXISTS(pSettings, r_float, hud_sect, "lookout_ampl_k", 1.0f);
 
+	m_fHudYawInertiaK = READ_IF_EXISTS(pSettings, r_float, hud_sect, "hud_yaw_inertia_k", 0.2f);
+	m_fHudPitchInertiaK = READ_IF_EXISTS(pSettings, r_float, hud_sect, "hud_pitch_inertia_k", 0.2f);
+	m_fHudRollInertiaK = READ_IF_EXISTS(pSettings, r_float, hud_sect, "hud_roll_inertia_k", 0.15f);
+	m_fHudInertiaSpeed = READ_IF_EXISTS(pSettings, r_float, hud_sect, "hud_inertia_speed", 50.0f);
+	m_fHudInertiaDamp = READ_IF_EXISTS(pSettings, r_float, hud_sect, "hud_inertia_damp", 20.0f);
+
 	m_fActorCamSpeedFactor = READ_IF_EXISTS(pSettings, r_float, section, "actor_camera_speed_factor", 1.0f);
 
 	m_current_inertion.PitchOffsetR = READ_IF_EXISTS(pSettings, r_float, hud_sect, "inertion_pitch_offset_r", PITCH_OFFSET_R);
@@ -407,7 +413,41 @@ void CHudItem::SendHiddenItem()
 
 void CHudItem::UpdateHudAdditonal(Fmatrix& trans)
 {
-	//TODO: Implement new yaw & pitch inertion
+	if (m_fHudYawInertiaK == 0.0f && m_fHudPitchInertiaK == 0.0f)
+		return;
+
+	CActor* pActor = Level().CurrentControlEntity() != nullptr ? Level().CurrentControlEntity()->cast_actor() : nullptr;
+	if (pActor == nullptr)
+		return;
+
+	Fvector fTarget;
+	fTarget.set(-pActor->fFPCamYawMagnitude * m_fHudYawInertiaK,
+	            -pActor->fFPCamPitchMagnitude * m_fHudPitchInertiaK,
+	            0.0f);
+
+	const float fStiffness = m_fHudInertiaSpeed;
+	const float fDamping = m_fHudInertiaDamp * 2.0f * sqrtf(fStiffness);
+	m_fHudInertia.spring_inertion(fTarget, m_fHudInertiaVel, Device.fTimeDelta, fStiffness, fDamping);
+
+	if (m_fHudInertia.similar(Fvector().set(0.0f, 0.0f, 0.0f), EPS_L) &&
+	    m_fHudInertiaVel.similar(Fvector().set(0.0f, 0.0f, 0.0f), EPS_L))
+		return;
+
+	Fmatrix hud_inertia;
+	hud_inertia.identity();
+	hud_inertia.rotateY(m_fHudInertia.x);
+
+	Fmatrix hud_inertia_p;
+	hud_inertia_p.identity();
+	hud_inertia_p.rotateX(m_fHudInertia.y);
+	hud_inertia.mulA_43(hud_inertia_p);
+
+	Fmatrix hud_inertia_r;
+	hud_inertia_r.identity();
+	hud_inertia_r.rotateZ(m_fHudInertia.x * m_fHudRollInertiaK);
+	hud_inertia.mulA_43(hud_inertia_r);
+
+	trans.mulB_43(hud_inertia);
 }
 
 void CHudItem::UpdateCL()

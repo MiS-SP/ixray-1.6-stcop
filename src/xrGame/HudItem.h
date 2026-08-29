@@ -376,6 +376,17 @@ protected:
 	float						m_fLookOutAmplK = 1.0f;
 	float						m_fActorCamSpeedFactor = 1.0f;
 
+	// camera angular-velocity (yaw/pitch) based HUD inertia //--#SM+ Begin#--
+	float						m_fHudYawInertiaK = 0.0f;	// yaw inertia amplitude (from fFPCamYawMagnitude)
+	float						m_fHudPitchInertiaK = 0.0f;	// pitch inertia amplitude (from fFPCamPitchMagnitude)
+	float						m_fHudRollInertiaK = 0.0f;	// roll (z) tilt coupled to yaw inertia
+	float						m_fHudInertiaSpeed = 45.0f;	// stiffness (higher = snappier)
+	float						m_fHudInertiaDamp = 0.85f;	// damping ratio (<1 underdamped, 1 critical)
+
+	Fvector						m_fHudInertia;		// current inertia angles (x=yaw, y=pitch)
+	Fvector						m_fHudInertiaVel;	// inertia angular velocities (x=yaw, y=pitch)
+	//--#SM+ End#--
+
 	bool						m_bDisableBore;
 	bool						m_bSwitchSprint = false;
 	bool						m_bBlendMovement = false;
