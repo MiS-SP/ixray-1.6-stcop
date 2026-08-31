@@ -1251,7 +1251,12 @@ bool IndicatorsShown()
 
 bool InventoryShown()
 {
-	return CurrentGameUI()->GetActiveInventoryWindow()->IsShown();
+	if (!CurrentGameUI())
+	{
+		return false;
+	}
+
+	return !!CurrentGameUI()->GetActiveInventoryWindow();
 }
 
 bool ElectronicsBreak()
