@@ -256,8 +256,8 @@ void CInventoryItem::SetAdditionalDescription(const char* text)
 
 void CInventoryItem::SetPrependDescription(const char* text)
 {
-	m_PrependDescription = text;
-	m_IsUsedPrependDescription = xr_strcmp(m_PrependDescription, "") != 0;
+	m_PrependDescription = text ? text : "";
+	m_IsUsedPrependDescription = text && text[0];
 	
 	if (m_IsUsedPrependDescription)
 	{
@@ -273,21 +273,36 @@ void CInventoryItem::SetPrependDescription(const char* text)
 
 void CInventoryItem::BuildDescription()
 {
-	if (m_IsUsedAdditionalDescription && m_IsUsedPrependDescription)
+	xr_string Description;
+
+	auto AppendDescriptionBlockLambda = [&Description](const char* Text)
 	{
-		m_ExtendedUnionDescription = make_string<const char*>("%s\\n\\n%s\\n\\n%s", m_PrependDescription.c_str(), m_Description.c_str(), m_AdditionalDescription.c_str());
-		return;
-	}
+		if (!Text || !Text[0])
+		{
+			return;
+		}
+
+		if (!Description.empty())
+		{
+			Description += "\\n\\n";
+		}
+
+		Description += Text;
+	};
 
 	if (m_IsUsedPrependDescription)
 	{
-		m_ExtendedUnionDescription = make_string<const char*>("%s\\n\\n%s", m_PrependDescription.c_str(), m_Description.c_str());
+		AppendDescriptionBlockLambda(m_PrependDescription.c_str());
 	}
+
+	AppendDescriptionBlockLambda(m_Description.c_str());
 
 	if (m_IsUsedAdditionalDescription)
 	{
-		m_ExtendedUnionDescription = make_string<const char*>("%s\\n\\n%s", m_Description.c_str(), m_AdditionalDescription.c_str());
+		AppendDescriptionBlockLambda(m_AdditionalDescription.c_str());
 	}
+
+	m_ExtendedUnionDescription = Description.c_str();
 }
 
 CInventoryItem::EInvCellAnchor CInventoryItem::ParseInvCellAnchor(const char* value)

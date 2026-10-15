@@ -664,7 +664,7 @@ bool CScriptGameObject::IsItemUsedAdditionalDescription()
 {
 	if (CInventoryItem* inventory_item = object().cast_inventory_item())
 	{
-		inventory_item->IsUsedAdditionalDescription();
+		return inventory_item->IsUsedAdditionalDescription();
 	}
 
 	return false;
@@ -686,7 +686,7 @@ bool CScriptGameObject::IsItemUsedPrependDescription()
 {
 	if (CInventoryItem* inventory_item = object().cast_inventory_item())
 	{
-		inventory_item->IsUsedPrependDescription();
+		return inventory_item->IsUsedPrependDescription();
 	}
 
 	return false;

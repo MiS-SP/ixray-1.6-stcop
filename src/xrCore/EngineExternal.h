@@ -62,6 +62,7 @@ enum class EEngineExternalGame
 	EnableSaveOnNewGame,
 	EnableSuicideByController,
 	Enable3DIcons,
+	EnablePowerCellContextMenu,
 	None
 };
 
