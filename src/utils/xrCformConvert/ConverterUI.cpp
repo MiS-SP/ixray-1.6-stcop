@@ -3,7 +3,7 @@
 
 #include <imgui.h>
 
-#include "../xrForms/cl_log.h"
+#include "../xrLevelBuilder/Common/cl_log.h"
 #include <timeapi.h>
 #include <algorithm>
 #ifdef IXR_WINDOWS
@@ -94,7 +94,6 @@ void CFormConverter::RenderMainUI()
 		SDL_SetWindowSize(g_AppInfo.Window, 1000, 675);
 	}
 	
-
 	if (ImGui::Begin("MainForm", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNavFocus))
 	{
 		ImVec2 ListBoxSize = { float(Size[0] - 20), float ( Size[1] - 115) };
