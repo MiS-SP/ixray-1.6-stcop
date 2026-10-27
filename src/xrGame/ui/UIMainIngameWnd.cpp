@@ -1311,9 +1311,10 @@ void CUIMainIngameWnd::UpdatePickUpItem	()
 	static const bool enable3DIcons = EngineExternal()[EEngineExternalGame::Enable3DIcons];
 	if (enable3DIcons)
 	{
-		UIPickUpItemIcon->SetVisual(icons_struct._3d_static_visual);
+		UIPickUpItemIcon->SetIconVisual(icons_struct._3d_static_visual);
 		UIPickUpItemIcon->SetXYZ(icons_struct._3d_static_rotate);
 		UIPickUpItemIcon->SetScaleFactor(icons_struct._3d_static_scale);
+		UIPickUpItemIcon->SetIconOffset(icons_struct.IconOffset);
 		UIPickUpItemIcon->SetBonesVisible(m_pPickUpItem->object().Visual()->dcast_PKinematics());
 	}
 	else
@@ -1834,9 +1835,10 @@ void CUIMainIngameWnd::UpdateQuickSlots()
 				static const bool enable3DIcons = EngineExternal()[EEngineExternalGame::Enable3DIcons];
 				if (enable3DIcons)
 				{
-					slot->SetVisual(icons_struct._3d_static_visual);
+					slot->SetIconVisual(icons_struct._3d_static_visual);
 					slot->SetXYZ(icons_struct._3d_static_rotate);
 					slot->SetScaleFactor(icons_struct._3d_static_scale);
+					slot->SetIconOffset(icons_struct.IconOffset);
 				}
 				else
 				{

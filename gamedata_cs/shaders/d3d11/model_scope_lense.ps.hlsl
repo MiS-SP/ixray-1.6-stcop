@@ -1,6 +1,8 @@
 #include "common.hlsli"
+#include "scope_ui.hlsli"
 
 uniform float4 m_hud_params;
+#include "scope_lens.hlsli"
 
 struct v2p
 {
@@ -58,8 +60,10 @@ float4 main(v2p I, float4 pos2d : SV_POSITION) : SV_Target
     float4 t_base = s_base.Sample(smp_base, I.tc0);
 	t_base.xyz = detonemap(t_base.xyz);
 	
-    float4 t_vp2 = s_image[pos2d.xy];
+    float4 t_vp2 = SampleScopeScene(I.tc0, pos2d.xy);
 	
+	t_vp2.xyz = ApplyScopeUI(t_vp2.xyz, pos2d.xy);
+
 	float alpha = m_hud_params.y * m_hud_params.a;
 	t_vp2 *= saturate(alpha * 2.0f - 1.0f) * Fade;
 	

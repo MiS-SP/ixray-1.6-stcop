@@ -81,6 +81,9 @@ public:
 
 	virtual void			render_item_ui		();
 	virtual bool			render_item_ui_query();
+	bool ScopeEffectQuery();
+	bool ScopeUIQuery();
+	void RenderScopeUI();
 
 	virtual void			OnH_B_Chield		();
 	virtual void			OnH_A_Chield		();
@@ -301,6 +304,10 @@ public:
 	bool bLoadAltScopesParams(const char* section);
 	void LoadOriginalScopesParams(const char* section);
 	void LoadCurrentScopeParams(const char* section);
+	void LoadScopeEffects(const char* Section);
+	void RefreshScopeDetector();
+	void RefreshScopeNightVision();
+	bool InstallScopeEffectsUpgrade(const char* Section, bool IsTest);
 	const shared_str& GetSilencerName			() const{return m_sSilencerName;}
 
 	IC void	ForceUpdateAmmo						()		{ m_BriefInfo_CalcFrame = 0; }
@@ -342,6 +349,8 @@ public:
 		bool  need_lens_frame = false;
 		bool  force_zoom_sound = false;
 	} m_lens_zoom_params;
+
+	float ScopeAberration = 0.0f;
 
 	struct stepped_params
 	{

@@ -574,7 +574,6 @@ public:
 	bool					CanJump					();
 	bool					CanMove					();
 	float					CameraHeight			();
-	float					CurrentHeight; // Alex ADD: for smooth crouch
 	bool					CanSprint				();
 	bool					CanRun					();
 	virtual void			StopAnyMove				() override;
@@ -604,6 +603,8 @@ public:
 
 	bool					bBlockSprint;
 	u32						m_iKeyFlags = 0;
+	float CurrentHeight; // Alex ADD: for smooth crouch
+	Fvector CamPivot;
 
 public:
 	Fvector					GetMovementSpeed		() {return NET_SavedAccel;};
@@ -810,7 +811,8 @@ public:
 
 	virtual void			RenderIndicator			(Fvector dpos, float r1, float r2, const ui_shader &IndShader);
 	virtual void			RenderText				(const char* Text, Fvector dpos, float* pdup, u32 color);
-	virtual void			RenderItemUI();
+	void			RenderItemUI() override;
+	void RenderScopeUI();
 
 	//////////////////////////////////////////////////////////////////////////
 	// Controlled Routines

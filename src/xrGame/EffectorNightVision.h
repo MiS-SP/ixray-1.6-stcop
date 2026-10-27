@@ -2,6 +2,9 @@
 
 #include "HudSound.h"
 #include "Actor.h"
+#include "PostprocessAnimator.h"
+
+class CUIGameCustom;
 
 class CNightVisionEffector
 {
@@ -9,6 +12,7 @@ class CNightVisionEffector
 	HUD_SOUND_COLLECTION	m_sounds;
 	RStringVec				m_disabled_maps = {};
 	bool					m_bNightVisionOn = false;
+	bool ShaderNightVision = false;
 public:
 
 	enum EPlaySounds
@@ -28,6 +32,8 @@ public:
 	void	SwitchNightVision();
 	void	SwitchNightVision(bool vision_on, bool use_sounds = true);
 	bool	GetStatus() const { return m_bNightVisionOn; }
+	void RefreshNightVision();
+	void UpdateMask(CUIGameCustom& GameUI);
 };
 
 struct TWeaponNightVision
@@ -35,11 +41,13 @@ struct TWeaponNightVision
 private:
 	bool m_bNightVisionOn = false;
 	shared_str m_section;
+	xr_unique_ptr<CPostprocessAnimator> ScopeAnimator;
 
 public:
 	void EndComponent();
 
 	void Load(const shared_str& sect);
+	void UpdateScopePostprocess(float Factor);
 	void SwitchNightVision(bool vision_on);
 	bool IsActive();
 	bool GetStatus() const { return m_bNightVisionOn; }

@@ -558,7 +558,7 @@ CRenderTarget::CRenderTarget()
 		rt_Generic.create(r2_RT_generic, get_target_width(), get_target_height(), ERHI_FORMAT::R16G16B16A16_FLOAT, 1, isUAV);
 
 		rt_BackbufferLUT.create(r2_RT_backbuffer_lut, get_target_width(), get_target_height(), ERHI_FORMAT::R10G10B10A2_UNORM);
-		rt_ui_pda.create(r_ui_pda, get_target_width(), get_target_height(), ERHI_FORMAT::R10G10B10A2_UNORM);
+		rt_ui_pda.create(r_ui_pda, get_target_width(), get_target_height(), ERHI_FORMAT::R16G16B16A16_FLOAT);
 	}
 
 	rt_upscaled_depth.create(r2_RT_upscaled_depth, s_dwWidth, s_dwHeight, ERHI_FORMAT::R16_FLOAT);
@@ -590,6 +590,8 @@ CRenderTarget::CRenderTarget()
 
 		b_gasmask = new CBlenderGasMask;
 		s_gasmask.create(b_gasmask);
+		FlatGasMaskBlender = new CBlenderGasMask(VisorGlassType::Flat);
+		FlatGasMaskShader.create(FlatGasMaskBlender);
 	}
 
 	// SMAA
@@ -1033,6 +1035,7 @@ CRenderTarget::CRenderTarget()
 
 	// PP
 	s_postprocess.create("postprocess");
+	ScopePostprocessShader.create("scope_postprocess");
 	g_postprocess.create(D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_SPECULAR | D3DFVF_TEX3, RCache.Vertex.Buffer(), RCache.QuadIB);
 
 	// Menu
@@ -1133,6 +1136,7 @@ CRenderTarget::~CRenderTarget	()
 	xr_delete(b_gamma);
 	xr_delete(b_spp);
 	xr_delete(b_gasmask);
+	xr_delete(FlatGasMaskBlender);
 	xr_delete(b_accum_mask);
 	xr_delete(b_occq);
 	xr_delete(b_cas);

@@ -2,6 +2,9 @@
 #include "ArmorBase.h"
 #include "object_broker.h"
 #include "Actor.h"
+#include "ActorHelmet.h"
+#include "CustomOutfit.h"
+#include "EffectorNightVision.h"
 #include "game_cl_base.h"
 #include "Level.h"
 #include "Inventory.h"
@@ -60,6 +63,16 @@ void CArmorBase::OnH_A_Chield()
 	}
 }
 
+Fcolor CArmorBase::GetNV_Color() const
+{
+	// Resolve the current profile when enabling NVG, including a profile changed by upgrades.
+	if (!NightVisionColorFromItem && m_NightVisionSect.size() && pSettings->section_exist(m_NightVisionSect) && pSettings->line_exist(m_NightVisionSect, "shader_nvg_color"))
+	{
+		return pSettings->r_fcolor(m_NightVisionSect, "shader_nvg_color");
+	}
+	return m_NightVisionColor;
+}
+
 void CArmorBase::Load(const char* section)
 {
 	inherited::Load(section);
@@ -94,16 +107,14 @@ void CArmorBase::Load(const char* section)
 		m_NightVisionSect = pSettings->r_string(section, "nightvision_sect");
 	}
 
-	if (pSettings->line_exist(section, "nightvision_color"))
+	NightVisionColorFromItem = pSettings->line_exist(section, "nightvision_color");
+	if (NightVisionColorFromItem)
 	{
 		m_NightVisionColor = pSettings->r_fcolor(section, "nightvision_color");
 	}
 	else
 	{
-		m_NightVisionColor.r = 0.3f;
-		m_NightVisionColor.g = 1.0f;
-		m_NightVisionColor.b = 0.2f;
-		m_NightVisionColor.a = 0.0f;
+		m_NightVisionColor.set(0.3f, 1.0f, 0.2f, 0.0f);
 	}
 
 	pSettings->read_if_exists(m_bTorchAvailable, section, "torch_available");
@@ -117,6 +128,12 @@ void CArmorBase::Load(const char* section)
 
 	bIsHudGasMaskAvailable = !!READ_IF_EXISTS(pSettings, r_bool, section, "hud_gas_mask_avaliable", true);		// FFx0001 ++
 	bIsHudRainDropsAvailable = !!READ_IF_EXISTS(pSettings, r_bool, section, "hud_rain_drops_avaliable", true);  // FFx0001 ++
+	const char* GasMaskType = READ_IF_EXISTS(pSettings, r_string, section, "hud_gas_mask_type", "flat");
+	GlassType = xr_strcmp(GasMaskType, "curved") == 0 ? VisorGlassType::Curved : VisorGlassType::Flat;
+	if (GlassType == VisorGlassType::Flat && xr_strcmp(GasMaskType, "flat") != 0)
+	{
+		Msg("! Unknown hud_gas_mask_type '%s' in [%s], using flat", GasMaskType, section);
+	}
 
 	if (pSettings->line_exist(section, "glass_present"))
 	{
@@ -195,7 +212,24 @@ bool CArmorBase::install_upgrade_impl(const char* section, bool test)
 	result |= process_if_exists(section, "explosion_protection", m_HitTypeProtection[ALife::eHitTypeExplosion], test);
 	result |= process_if_exists(section, "fire_wound_protection", m_HitTypeProtection[ALife::eHitTypeFireWound], test);
 
-	result |= process_if_exists_set(section, "nightvision_sect", m_NightVisionSect, test);
+	const shared_str PreviousNightVisionSection = m_NightVisionSect;
+	const bool HasNightVisionUpgrade = process_if_exists_set(section, "nightvision_sect", m_NightVisionSect, test);
+	result |= HasNightVisionUpgrade;
+	if (!test && HasNightVisionUpgrade && PreviousNightVisionSection != m_NightVisionSect)
+	{
+		CActor* Actor = H_Parent() ? H_Parent()->cast_actor() : nullptr;
+		if (Actor && Actor->inventory().InSlot(this))
+		{
+			CHelmet* Helmet = Actor->GetHelmet();
+			const bool IsNightVisionSource = Helmet && Helmet->GetNV_Sect().size()
+				? static_cast<CArmorBase*>(Helmet) == this
+				: static_cast<CInventoryItem*>(Actor->GetOutfit()) == static_cast<CInventoryItem*>(this);
+			if (IsNightVisionSource && Actor->GetNightVisionEffector())
+			{
+				Actor->GetNightVisionEffector()->RefreshNightVision();
+			}
+		}
+	}
 
 	result |= process_if_exists_set(section, "torch_available", m_bTorchAvailable, test);
 

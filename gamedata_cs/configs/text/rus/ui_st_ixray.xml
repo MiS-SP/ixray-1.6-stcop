@@ -408,9 +408,6 @@
 	<string id="kb_clear_gasmask">
 		<text>Протирание маски</text>
 	</string>
-	<string id="ui_mm_mouse_sense_ui">
-		<text>Чувствительность мыши в UI</text>
-	</string>
 	<string id="ui_mm_r4_use_gasmask">
 		<text>Эффект маски стекла</text>
 	</string>
@@ -1013,5 +1010,14 @@
 	</string>
 	<string id="ui_rmw_wpn_laser">
 		<text>$$ACTION_WPN_LASER$$ ЛЦУ</text>
+	</string>
+	<string id="ui_mm_r2_rain_drops_mode">
+		<text>Тип капель на стекле</text>
+	</string>
+	<string id="texture">
+		<text>Текстурные</text>
+	</string>
+	<string id="procedural">
+		<text>Процедурные</text>
 	</string>
 </string_table>

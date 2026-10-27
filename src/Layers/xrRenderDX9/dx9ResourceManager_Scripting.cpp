@@ -58,6 +58,12 @@ public:
 	adopt_compiler&			_o_emissive		(bool	E)								{	C->SH->flags.bEmissive=E;					return	*this;		}
 	adopt_compiler&			_o_distort		(bool	E)								{	C->SH->flags.bDistort=E;					return	*this;		}
 	adopt_compiler&			_o_wmark		(bool	E)								{	C->SH->flags.bWmark=E;						return	*this;		}
+	adopt_compiler&			_o_scope		(bool	E)								{	C->SH->flags.bScopeMask=E;					return	*this;		}
+	adopt_compiler& ScopePostprocess(bool Enabled)
+	{
+		C->SH->flags.ScopePostprocess = Enabled;
+		return *this;
+	}
 	adopt_compiler&			_pass			(const char*	vs,		const char* ps)				{	C->r_Pass			(vs,ps,true);			return	*this;		}
 	adopt_compiler&			_fog			(bool	_fog)							{	C->PassSET_LightFog	(false,_fog);			return	*this;		}
 	adopt_compiler&			_ZB				(bool	_test,	bool _write)			{	C->PassSET_ZB		(_test,_write);			return	*this;		}
@@ -151,6 +157,8 @@ void	CResourceManager::LS_Load			()
 			.def("emissive",					&adopt_compiler::_o_emissive	,return_reference_to<1>())
 			.def("distort",						&adopt_compiler::_o_distort		,return_reference_to<1>())
 			.def("wmark",						&adopt_compiler::_o_wmark		,return_reference_to<1>())
+			.def("scope",						&adopt_compiler::_o_scope		,return_reference_to<1>())
+			.def("scope_postprocess", &adopt_compiler::ScopePostprocess, return_reference_to<1>())
 			.def("fog",							&adopt_compiler::_fog			,return_reference_to<1>())
 			.def("zb",							&adopt_compiler::_ZB			,return_reference_to<1>())
 			.def("blend",						&adopt_compiler::_blend			,return_reference_to<1>())
@@ -293,6 +301,18 @@ Shader*	CResourceManager::_lua_Create		(const char* d_shader, const char* s_text
 		C.iElement			= 4;
 		C.bDetail			= false;
 		S.E[4]				= C._lua_Compile(s_shader,"l_special");
+	}
+
+	// Compile the UI variant with the same detail lookup as the normal pass.
+	if (Script::bfIsObjectPresent(LSVM, s_shader, "normal_ui", LUA_TFUNCTION))
+	{
+#if RENDER == R_R1
+		C.iElement = SE_R1_UI;
+#else
+		C.iElement = SE_R2_UI;
+#endif
+		C.bDetail = DEV->m_textures_description.GetDetailTexture(C.L_textures[0], C.detail_texture, C.detail_scaler);
+		S.UIElement = C._lua_Compile(s_shader, "normal_ui");
 	}
 
 	// Search equal in shaders array

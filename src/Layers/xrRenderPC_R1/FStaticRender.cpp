@@ -30,6 +30,10 @@ ShaderElement*			CRender::rimp_select_sh_dynamic	(dxRender_Visual	*pVisual, floa
 {
 	if (!!RImplementation.val_bUI)
 	{
+		if (auto* Element = pVisual->shader->UIElement._get())
+		{
+			return Element;
+		}
 		if (auto pSh = pVisual->shader->E[SE_R1_UI]._get())
 		{
 			return pSh;
@@ -346,19 +350,6 @@ void CRender::Calculate				()
 		vLastCameraPos.set(Device.vCameraPosition);
 	}
 
-	// Check if camera is too near to some portal - if so force DualRender
-	if (rmPortals) 
-	{
-		Fvector box_radius;		box_radius.set(EPS_L*2,EPS_L*2,EPS_L*2);
-		Sectors_xrc.box_options	(CDB::OPT_FULL_TEST);
-		Sectors_xrc.box_query	(rmPortals,Device.vCameraPosition,box_radius);
-		for (int K=0; K<Sectors_xrc.r_count(); K++)
-		{
-			CPortal*	pPortal		= (CPortal*) Portals[rmPortals->get_tris()[Sectors_xrc.r_begin()[K].id].dummy];
-			pPortal->bDualRender	= true;
-		}
-	}
-	//
 	if (L_DB)
 		L_DB->Update();
 
@@ -524,20 +515,34 @@ void CRender::Calculate				()
 
 void CRender::RenderUI(Fcolor* color)
 {
-	Target->u_setrt(RCache.get_width(), RCache.get_height(), RTarget, nullptr, nullptr, RDepth);
+	auto& IconTint = dxRenderDeviceRender::Instance().UIIconTint;
+	IconTint = color ? *color : Fcolor{1.0f, 1.0f, 1.0f, 1.0f};
+
+	auto* UITarget = RCache.get_RT();
+	Target->u_setrt(RCache.get_width(), RCache.get_height(), UITarget, nullptr, nullptr, RDepth);
 	rmNormal();
 
+	CHK_DX(RDevice->SetRenderState(D3DRS_CULLMODE, D3DCULL_CCW));
+	CHK_DX(RDevice->SetRenderState(D3DRS_ZENABLE, D3DZB_TRUE));
+
+	auto Scissor = UIRender->GetScissor();
+	UIRender->SetScissor(&Scissor);
 	CHK_DX(RDevice->Clear(0L, nullptr, D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL, 0x0, 1.0f, 0L));
 
+	const bool UISaved = val_bUI;
+	set_UI(true);
 	r_dsgraph_render_ui();
 	r_dsgraph_render_sorted_ui();
+	set_UI(UISaved);
 
 	marker++;
-	Target->u_setrt(RCache.get_width(), RCache.get_height(), RTarget, nullptr, nullptr, nullptr);
+	Target->u_setrt(RCache.get_width(), RCache.get_height(), UITarget, nullptr, nullptr, nullptr);
 
 	rmNormal();
+	UIRender->SetScissor(&Scissor);
 
 	mapDistort.clear();
+	IconTint.set(1.0f, 1.0f, 1.0f, 1.0f);
 }
 
 void CRender::Render()
@@ -564,6 +569,7 @@ void CRender::Render()
 	o.vis_intersect								= false			;
 	phase										= PHASE_NORMAL	;
 	r_dsgraph_render_hud						();				// hud
+	r_dsgraph_render_scope();
 	r_dsgraph_render_graph						(0);			// normal level
 	if(Details)Details->Render					();				// grass / details
 	r_dsgraph_render_lods						(true,false);	// lods - FB
@@ -588,10 +594,16 @@ void CRender::Render()
 	L_Dynamic->render							(1);			// addititional light sources, secondary priority
 	phase = PHASE_NORMAL;
 	PortalTraverser.fade_render					();				// faded-portals
-	r_dsgraph_render_sorted						();				// strict-sorted geoms
+	r_dsgraph_render_sorted						(false);			// strict-sorted geoms
 	if(L_Glows)L_Glows->Render					();				// glows
 	g_pGamePersistent->Environment().RenderFlares	();				// lens-flares
 	g_pGamePersistent->Environment().RenderLast	();				// rain/thunder-bolts
+	if (ScopeSceneRequired)
+	{
+		Target->CopyScopeScene();
+		ScopeSceneRequired = false;
+	}
+	r_dsgraph_render_sorted_hud();
 
 #if DEBUG
 	for (int _priority=0; _priority<2; ++_priority)

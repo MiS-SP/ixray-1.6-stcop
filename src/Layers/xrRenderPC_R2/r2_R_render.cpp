@@ -336,21 +336,39 @@ void CRender::render_menu	()
 	RCache.Render					(ERHI_PRIMITIVE_TOPOLOGY::TRIANGLE_LIST,Offset,0,4,0,2);
 }
 
+#include "../../Include/xrRender/UIRender.h"
+
 void CRender::RenderUI(Fcolor* color)
 {
-	Target->u_setrt((u32)RCache.get_target_width(), (u32)RCache.get_target_height(), Target->rt_Position->pRT, Target->rt_Normal->pRT, RTarget, RDepth);
+	auto& IconTint = dxRenderDeviceRender::Instance().UIIconTint;
+	IconTint = color ? *color : Fcolor{1.0f, 1.0f, 1.0f, 1.0f};
+
+	auto* UITarget = RCache.get_RT();
+
+	Target->u_setrt(RCache.get_width(), RCache.get_height(), UITarget, nullptr, nullptr, RDepth);
+	rmNormal();
+
+	CHK_DX(RDevice->SetRenderState(D3DRS_CULLMODE, D3DCULL_CCW));
+	CHK_DX(RDevice->SetRenderState(D3DRS_ZENABLE, D3DZB_TRUE));
+
+	CHK_DX(RDevice->SetRenderState(D3DRS_STENCILENABLE, FALSE));
+	CHK_DX(RDevice->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_RED | D3DCOLORWRITEENABLE_GREEN | D3DCOLORWRITEENABLE_BLUE | D3DCOLORWRITEENABLE_ALPHA));
+	CHK_DX(RDevice->SetRenderState(D3DRS_SEPARATEALPHABLENDENABLE, FALSE));
+
+	auto Scissor = UIRender->GetScissor();
+	UIRender->SetScissor(&Scissor);
+
 	CHK_DX(RDevice->Clear(0L, nullptr, D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL, 0x0, 1.0f, 0L));
-	rmNormal();
 
+	const bool UISaved = val_bUI;
+	set_UI(true);
 	r_dsgraph_render_ui();
-
-	Target->u_setrt(RCache.get_width(), RCache.get_height(), RTarget, nullptr, nullptr, RDepth);
-	rmNormal();
-
 	r_dsgraph_render_sorted_ui();
+	set_UI(UISaved);
 
 	marker++;
-	Target->u_setrt(RCache.get_width(), RCache.get_height(), RTarget, nullptr, nullptr, nullptr);
+	Target->u_setrt(RCache.get_width(), RCache.get_height(), UITarget, nullptr, nullptr, nullptr);
+	IconTint.set(1.0f, 1.0f, 1.0f, 1.0f);
 }
 
 void CRender::Render()
@@ -430,12 +448,23 @@ void CRender::Render()
 	bool	split_the_scene_to_minimize_wait		= false;
 	if (ps_r2_ls_flags.test(R2FLAG_EXP_SPLIT_SCENE))	split_the_scene_to_minimize_wait=true;
 
+	if (mapHUDScopeMask.size() > 0)
+	{
+		split_the_scene_to_minimize_wait = false;
+	}
+
 	//******* Main render :: PART-0	-- first
 	if (!split_the_scene_to_minimize_wait)
 	{
 		// level, DO NOT SPLIT
 		Target->phase_scene_begin				();
 		r_dsgraph_render_hud					();
+		if (mapHUDScopeMask.size() > 0)
+		{
+			Target->u_setrt(Target->rt_Position, nullptr, nullptr, RDepth);
+			r_dsgraph_render_scope();
+			Target->phase_scene_begin();
+		}
 		r_dsgraph_render_graph					(0);
 		r_dsgraph_render_lods					(true,true);
 		if(Details)	Details->Render				();
@@ -603,8 +632,14 @@ void CRender::render_forward				()
 
 		r_dsgraph_render_graph					(1)	;					// normal level, secondary priority
 		PortalTraverser.fade_render				()	;					// faded-portals
-		r_dsgraph_render_sorted					()	;					// strict-sorted geoms
+		r_dsgraph_render_sorted					(false)	;				// strict-sorted geoms
 		g_pGamePersistent->Environment().RenderLast()	;					// rain/thunder-bolts
+		if (ScopeSceneRequired)
+		{
+			Target->CopyScopeScene();
+			ScopeSceneRequired = false;
+		}
+		r_dsgraph_render_sorted_hud();
 	}
 
 	RImplementation.o.distortion				= false;				// disable distorion

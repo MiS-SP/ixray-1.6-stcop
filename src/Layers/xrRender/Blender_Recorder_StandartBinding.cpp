@@ -6,12 +6,74 @@
 #include "blenders/Blender.h"
 
 #include "../../xrEngine/IGame_Persistent.h"
+#include "../../xrEngine/IGame_Menu.h"
 #include "../../xrEngine/Environment.h"
 
 #include "dxRenderDeviceRender.h"
 #include "../../xrEngine/IGame_Level.h"
 #include "../../xrEngine/date_time.h"
 // matrices
+class ScopePostprocessBinding final : public RHIShaderConstant::Setup
+{
+public:
+	void setup(RHIShaderConstant* Constant) override
+	{
+		RCache.set_c(Constant, Device.ScopePostprocessActive ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
+	}
+};
+
+static ScopePostprocessBinding g_ScopePostprocessBinding;
+
+class UIIconLightBinding final : public RHIShaderConstant::Setup
+{
+public:
+	void setup(RHIShaderConstant* Constant) override
+	{
+		if (const auto* Settings = Device.m_pRender->GetUIIconLighting())
+		{
+			RCache.set_c(Constant, Settings->Color.x * Settings->Intensity, Settings->Color.y * Settings->Intensity, Settings->Color.z * Settings->Intensity, Settings->Ambient);
+		}
+	}
+};
+
+class UIIconDirectionBinding final : public RHIShaderConstant::Setup
+{
+public:
+	void setup(RHIShaderConstant* Constant) override
+	{
+		if (const auto* Settings = Device.m_pRender->GetUIIconLighting())
+		{
+			RCache.set_c(Constant, Settings->Direction.x, Settings->Direction.y, Settings->Direction.z, 0.0f);
+		}
+	}
+};
+
+class UIIconTintBinding final : public RHIShaderConstant::Setup
+{
+public:
+	void setup(RHIShaderConstant* Constant) override
+	{
+		const Fcolor& Tint = dxRenderDeviceRender::Instance().UIIconTint;
+		RCache.set_c(Constant, Tint.r, Tint.g, Tint.b, Tint.a);
+	}
+};
+
+static UIIconLightBinding g_UIIconLightBinding;
+static UIIconDirectionBinding g_UIIconDirectionBinding;
+static UIIconTintBinding g_UIIconTintBinding;
+
+class UIIconEmissiveTintBinding final : public RHIShaderConstant::Setup
+{
+public:
+	void setup(RHIShaderConstant* Constant) override
+	{
+		// World rendering stays neutral; the icon draw overrides this constant explicitly.
+		RCache.set_c(Constant, 1.0f, 1.0f, 1.0f, 1.0f);
+	}
+};
+
+static UIIconEmissiveTintBinding g_UIIconEmissiveTintBinding;
+
 #define	BIND_DECLARE(xf)	\
 class cl_xform_##xf	: public RHIShaderConstant::Setup {	virtual void setup (RHIShaderConstant* C) { RCache.xforms.set_c_##xf (C); } }; \
 	static cl_xform_##xf	binder_##xf
@@ -504,6 +566,11 @@ static class cl_rain_params : public RHIShaderConstant::Setup {
 
 	virtual void setup(RHIShaderConstant* C)
 	{
+		if (g_pGameLevel == nullptr)
+		{
+			return;
+		}
+
 #ifdef _EDITOR
 		if (!g_pGamePersistent || !g_pGamePersistent->Environment().CurrentEnv) {
 			RCache.set_c(C, 0, 0, 0.0f, 0.0f);
@@ -515,6 +582,18 @@ static class cl_rain_params : public RHIShaderConstant::Setup {
 		RCache.set_c(C, rainDensity, rainWetness, 0.0f, (float)g_pGameLevel->UseSnowmask);
 	}
 } binder_rain_params;
+
+class VisorRainBinding final : public RHIShaderConstant::Setup
+{
+public:
+	void setup(RHIShaderConstant* Constant) override
+	{
+		const float Amount = g_pGamePersistent ? g_pGamePersistent->VisorRain.GetAmount() : 0.f;
+		RCache.set_c(Constant, Amount, 0.f, 0.f, 0.f);
+	}
+};
+
+static VisorRainBinding g_VisorRainBinding;
 
 static class cl_inv_v : public RHIShaderConstant::Setup
 {
@@ -550,7 +629,7 @@ static class cl_env_wind : public RHIShaderConstant::Setup
 static class cl_m_hud_params : public RHIShaderConstant::Setup
 {
 	virtual void setup(RHIShaderConstant* C) {
-		RCache.set_c(C, RDEVICE.hudViewportData.isRenderProcess, RDEVICE.hudViewportData.isRenderActive, 0.0f, RDEVICE.hudViewportData.renderZoomRotateFactor);
+		RCache.set_c(C, RDEVICE.hudViewportData.isRenderProcess, RDEVICE.hudViewportData.isRenderActive, RDEVICE.hudViewportData.ScopeAberration, RDEVICE.hudViewportData.renderZoomRotateFactor);
 	}
 }    binder_m_hud_params;
 
@@ -586,6 +665,11 @@ static class cl_m_timearrow : public RHIShaderConstant::Setup
 {
 	virtual void setup(RHIShaderConstant* C)
 	{
+		if (g_pGameLevel == nullptr)
+		{
+			return;
+		}
+
 		u32 year = 0, month = 0, day = 0, hours = 0, mins = 0, secs = 0, milisecs = 0;
 		split_time(g_pGameLevel->GetGameTime(), year, month, day, hours, mins, secs, milisecs);
 
@@ -606,6 +690,11 @@ static class cl_m_timearrow2 : public RHIShaderConstant::Setup
 {
 	virtual void setup(RHIShaderConstant* C)
 	{
+		if (g_pGameLevel == nullptr)
+		{
+			return;
+		}
+
 		u32 year = 0, month = 0, day = 0, hours = 0, mins = 0, secs = 0, milisecs = 0;
 		split_time(g_pGameLevel->GetGameTime(), year, month, day, hours, mins, secs, milisecs);
 
@@ -623,6 +712,10 @@ static class cl_digiclock : public RHIShaderConstant::Setup
 {
 	virtual void setup(RHIShaderConstant* C)
 	{
+		if (g_pGameLevel == nullptr)
+		{
+			return;
+		}
 		u32 year = 0, month = 0, day = 0, hours = 0, mins = 0, secs = 0, milisecs = 0;
 		split_time(g_pGameLevel->GetGameTime(), year, month, day, hours, mins, secs, milisecs);
 
@@ -645,6 +738,48 @@ class cl_NVG_Color : public RHIShaderConstant::Setup
 	}
 };
 static cl_NVG_Color binder_NVG_Color;
+
+extern ENGINE_API bool turn_nvg;
+
+class NightVisionStateBinding final : public RHIShaderConstant::Setup
+{
+	u32 Frame = u32(-1);
+	float Interference = 0.0f;
+	bool Initialized = false;
+
+public:
+	void setup(RHIShaderConstant* Constant) override
+	{
+		if (Frame != Device.dwFrame)
+		{
+			const float Target = clampr(Device.hudViewportData.CurrentElectronicsProblemsCnt / 10.0f, 0.0f, 1.0f);
+			if (!Initialized || Frame + 1 != Device.dwFrame)
+			{
+				Interference = Target;
+			}
+			else
+			{
+				const float MaxDelta = 0.2f * clampr(Device.fTimeDelta, 0.0f, 0.1f);
+				Interference += clampr(Target - Interference, -MaxDelta, MaxDelta);
+			}
+			Initialized = turn_nvg;
+			Frame = Device.dwFrame;
+		}
+		const bool MenuActive = g_pGamePersistent && g_pGamePersistent->m_pMainMenu && g_pGamePersistent->m_pMainMenu->IsActive();
+		RCache.set_c(Constant, turn_nvg && !MenuActive ? 1.0f : 0.0f, Interference, 0.0f, 0.0f);
+	}
+};
+static NightVisionStateBinding g_NightVisionStateBinder;
+
+class NightVisionProfileBinding final : public RHIShaderConstant::Setup
+{
+public:
+	void setup(RHIShaderConstant* Constant) override
+	{
+		RCache.set_c(Constant, g_pGamePersistent->ShaderParams.NightVisionPostprocess);
+	}
+};
+static NightVisionProfileBinding g_NightVisionProfileBinder;
 
 // Standart constant-binding
 void	CBlender_Compile::SetMapping()
@@ -721,6 +856,10 @@ void	CBlender_Compile::SetMapping()
 
 	r_Constant("L_hemi_color", &binder_hemi_color);
 	r_Constant("L_ambient", &binder_amb_color);
+	r_Constant("ui_icon_light", &g_UIIconLightBinding);
+	r_Constant("ui_icon_direction", &g_UIIconDirectionBinding);
+	r_Constant("ui_emissive_tint", &g_UIIconEmissiveTintBinding);
+	r_Constant("ui_static_color", &g_UIIconTintBinding);
 
 	r_Constant("screen_res", &binder_screen_res);
 	r_Constant("def_aref", &binder_def_aref);
@@ -731,9 +870,11 @@ void	CBlender_Compile::SetMapping()
 	r_Constant("screen_scale", &binder_screen_scale);
 
 	r_Constant("rain_params", &binder_rain_params);
+	r_Constant("visor_rain", &g_VisorRainBinding);
 
 	//LVutner: Gunslinger...
 	r_Constant("m_hud_params", &binder_m_hud_params);
+	r_Constant("ScopePostprocessActive", &g_ScopePostprocessBinding);
 	r_Constant("m_zoom_deviation", &binder_m_zoom_deviation);
 	r_Constant("m_affects", &binder_affects);
 	r_Constant("m_actor_params", &binder_actor_states);
@@ -741,6 +882,8 @@ void	CBlender_Compile::SetMapping()
 	r_Constant("m_timearrow2", &binder_m_timearrow2);
 	r_Constant("m_digiclock", &binder_digiclock);
 	r_Constant("nvg_color", &binder_NVG_Color);
+	r_Constant("NightVisionState", &g_NightVisionStateBinder);
+	r_Constant("NightVisionProfile", &g_NightVisionProfileBinder);
 
 	if (detail_scaler)
 	{

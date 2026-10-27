@@ -1018,11 +1018,16 @@ void CUIRankingWnd::get_favorite_weapon()
 		{
 			if (m_use_3d_icon)
 			{
-				m_favorite_weapon_icon->SetVisual(READ_IF_EXISTS(pSettings, r_string, str, "3d_static_visual_name", pSettings->r_string(str, "visual")));
+				m_favorite_weapon_icon->SetIconVisual(READ_IF_EXISTS(pSettings, r_string, str, "3d_static_visual_name", pSettings->r_string(str, "visual")));
+				if (!m_favorite_weapon_icon->GetVisual())
+				{
+					return;
+				}
 				Fvector rot = READ_IF_EXISTS(pSettings, r_fvector3, str, "3d_static_rotate", rot.set(0, 0, 0));
 				rot.mul(M_PI / 180.0f);
 				m_favorite_weapon_icon->SetXYZ(rot);
 				m_favorite_weapon_icon->SetScaleFactor(READ_IF_EXISTS(pSettings, r_float, str, "3d_static_scale", 1.f));
+				m_favorite_weapon_icon->SetIconOffset(READ_IF_EXISTS(pSettings, r_fvector2, str, "3d_static_offset", Fvector2().set(0.0f, 0.0f)));
 
 				RStringVec m_bDefHideBones{}, m_bDefShowBones{};
 
@@ -1087,6 +1092,7 @@ void CUIRankingWnd::get_favorite_weapon()
 				{
 					K->LL_SetBoneVisible(bone_id, false, false);
 				}
+				m_favorite_weapon_icon->CaptureIconBones();
 			}
 			else
 			{

@@ -401,7 +401,8 @@ void CRender::RenderUI(Fcolor* color)
 	UIRender->SetScissor(&Scissor);
 	rmNormal();
 
-	if(Target->rt_BackbufferLUT->pRT == pRT_0)
+	const bool HasBackground = Target->rt_BackbufferLUT->pRT == pRT_0;
+	if (HasBackground)
 	{
 		Target->phase_ui_postprocess_copy();
 	}
@@ -423,7 +424,7 @@ void CRender::RenderUI(Fcolor* color)
 	UIRender->SetScissor(&Scissor);
 	RImplementation.rmNormal();
 
-	Target->phase_ui_postprocess(color);
+	Target->phase_ui_postprocess(color, HasBackground);
 	++marker;
 }
 
@@ -484,6 +485,9 @@ void CRender::Render()
 		ps_r_taa_jitter_full.set(ps_r_taa_jitter);
 	}
 
+	Device.ScopePostprocessActive = false;
+	// Shared item UI is rendered once before any world or HUD passes.
+	GRHI->ClearTarget(Target->rt_ui_pda->pRT, ERTColor::Transparent);
 	if (GActorInterface)
 	{
 		Target->u_setrt(Target->rt_ui_pda, 0, 0);
@@ -854,7 +858,30 @@ void CRender::render_forward()
 	{
 		if(bSpecial)
 		{
-			GRHI->CopySurface(Target->rt_Accumulator->pSurface, Target->rt_Generic_0->pSurface);
+			for (const auto& Node : mapHUDSorted)
+			{
+				if (!Node.val.se->flags.ScopePostprocess)
+				{
+					Device.ScopePostprocessActive = false;
+					break;
+				}
+			}
+			if (Device.ScopePostprocessActive)
+			{
+				Target->phase_pp(&Device.ScopePostprocess);
+				if (RImplementation.o.dx11_disable_motion_vectors)
+				{
+					Target->u_setrt(Target->rt_Generic_0, nullptr, RDepth);
+				}
+				else
+				{
+					Target->u_setrt(Target->rt_Generic_0, Target->rt_Velocity, RDepth);
+				}
+			}
+			else
+			{
+				GRHI->CopySurface(Target->rt_Accumulator->pSurface, Target->rt_Generic_0->pSurface);
+			}
 		}
 
 		r_dsgraph_render_sorted_hud();

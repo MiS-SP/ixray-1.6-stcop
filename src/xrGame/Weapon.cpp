@@ -1,5 +1,6 @@
 #include "StdAfx.h"
 #include "Weapon.h"
+#include "Weapons/WeaponBoneVisibility.h"
 #include "entity_alive.h"
 #include "inventory_item_impl.h"
 #include "Inventory.h"
@@ -562,6 +563,8 @@ void CWeapon::Load		(const char* section)
 			NightVision->Load(m_zoom_params.m_sUseZoomPostprocess);
 		}
 	}
+
+	LoadScopeEffects(section);
 
 	auto ReachInAllSections = [&](const char* param_name)
 	{
@@ -1476,21 +1479,18 @@ void CWeapon::UpdateCL()
 	{
 		if (TWeaponNightVision* NightVision = GetComponent<TWeaponNightVision>())
 		{
-			if (!need_renderable())
+			const float Factor = GetNightPPEFactor();
+			if (!need_renderable() && Factor > EPS)
 			{
 				if (!NightVision->IsActive())
 				{
 					NightVision->SwitchNightVision(true);
 				}
-				else
-				{
-					float val = GetNightPPEFactor();
-
-					if (val >= 0.0f)
-					{
-						set_pp_effector_factor2(effWeaponNightVision, val);
-					}
-				}
+				set_pp_effector_factor2(effWeaponNightVision, Factor);
+			}
+			else if (NightVision->IsActive())
+			{
+				NightVision->SwitchNightVision(false);
 			}
 		}
 	}
@@ -1533,7 +1533,7 @@ void CWeapon::UpdateCL()
 	{
 		if (TBinocularsVision* Vision = GetComponent<TBinocularsVision>())
 		{
-			Vision->Update();
+			Vision->Update(!ScopeUIQuery());
 		}
 	}
 
@@ -1621,104 +1621,33 @@ void CWeapon::LoadUpgradeBonesToHide(const char* section, const char* line)
 
 void CWeapon::ProcessScope()
 {
-	s32 cur_index = -1;
-
-	if (IsScopeAttached() && get_ScopeStatus() == 2)
-		cur_index = m_cur_scope;
-
-	for (u32 i = 0; i < m_scopes.size(); ++i)
+	xr_vector<shared_str> Scopes;
+	for (u32 Index = 0; Index < m_scopes.size(); ++Index)
 	{
-		shared_str tmp = GetScopeSection(i);
-		bool status = (i == cur_index);
-
-		if (pSettings->line_exist(tmp, "bones"))
-			SetMultipleBonesStatus(tmp.c_str(), "bones", status);
-
-		if (pSettings->line_exist(tmp, "hide_bones"))
-			SetMultipleBonesStatus(tmp.c_str(), "hide_bones", !status);
+		Scopes.push_back(GetScopeSection(Index));
 	}
-
-	if (cur_index >= 0)
-	{
-		shared_str tmp = GetScopeSection(cur_index);
-		if (pSettings->line_exist(tmp, "overriding_hide_bones"))
-			SetMultipleBonesStatus(tmp.c_str(), "overriding_hide_bones", false);
-
-		if (pSettings->line_exist(tmp, "overriding_show_bones"))
-			SetMultipleBonesStatus(tmp.c_str(), "overriding_show_bones", true);
-	}
-	else
-	{
-		IKinematics* pWeaponVisual = Visual()->dcast_PKinematics();
-		R_ASSERT(pWeaponVisual);
-
-		pWeaponVisual->CalculateBones_Invalidate();
-
-		auto ChangeBoneVisible = [&](const shared_str& bone, bool status)
+	const bool HasScope = IsScopeAttached() && get_ScopeStatus() == 2;
+	const shared_str AttachedScope = HasScope ? GetScopeSection(m_cur_scope) : shared_str();
+	IKinematics* Model = Visual()->dcast_PKinematics();
+	R_ASSERT(Model);
+	WeaponBoneVisibility::VisitScopeBones(Scopes, HasScope ? AttachedScope.c_str() : nullptr, m_bScopeHideBones, m_bScopeShowBones,
+		[&](const shared_str& Bone, bool IsVisible, bool IsRecursive)
+		{
+			WeaponBoneVisibility::SetBone(*Model, Bone, IsVisible, IsRecursive);
+			if (HudItemData())
 			{
-				u16 bone_id = pWeaponVisual->LL_BoneID(bone);
-
-				if (bone_id != BI_NONE)
-					pWeaponVisual->LL_SetBoneVisible(bone_id, status, true);
-			};
-
-		for (auto& bone : m_bScopeHideBones)
-		{
-			ChangeBoneVisible(bone, false);
-		}
-
-		for (auto& bone : m_bScopeShowBones)
-		{
-			ChangeBoneVisible(bone, true);
-		}
-
-		if (HudItemData() == nullptr)
-			return;
-
-		for (auto& bone : m_bScopeHideBones)
-		{
-			HudItemData()->set_bone_visible(bone, false, true);
-		}
-
-		for (auto& bone : m_bScopeShowBones)
-		{
-			HudItemData()->set_bone_visible(bone, true, true);
-		}
-	}
+				HudItemData()->set_bone_visible(Bone, IsVisible, true);
+			}
+		});
+	// Showing a previously hidden scope leaves its zero-scale matrix until the skeleton is recalculated.
+	// Restore it before collision queries can disable the scope's bone shape.
+	Model->CalculateBones_Invalidate();
+	Model->CalculateBones(true);
 }
 
 void CWeapon::HideOneUpgradeLevel(const char* section)
 {
-	if (!!pSettings->line_exist(section, "elements"))
-	{
-		const char*	S = pSettings->r_string(section, "elements");
-		if (S && S[0])
-		{
-			string128 _Item;
-			int	count = _GetItemCount(S);
-			for (int it = 0; it < count; ++it)
-			{
-				_GetItem(S, it, _Item);
-				if (!!pSettings->line_exist(_Item, "effects"))
-				{
-					const char* St = pSettings->r_string(_Item, "effects");
-					if (St && St[0])
-					{
-						string128 _tmp = "";
-						int	cnt = _GetItemCount(St);
-						for (int itr = 0; itr < cnt; ++itr)
-						{
-							_GetItem(St, itr, _tmp);
-							HideOneUpgradeLevel(_tmp);
-						}
-					}
-				}
-
-				const char* up_sect = pSettings->r_string(_Item, "section");
-				LoadUpgradeBonesToHide(up_sect, "show_bones");
-			}
-		}
-	}
+	WeaponBoneVisibility::CollectUpgradeBones(section, m_bShowBonesUpgToHide);
 }
 
 bool CWeapon::need_renderable()
@@ -2773,135 +2702,52 @@ void CWeapon::UpdateHUDAddonsVisibility()
 
 void CWeapon::UpdateAddonsVisibility()
 {
-	IKinematics* pWeaponVisual = Visual()->dcast_PKinematics();
-	R_ASSERT(pWeaponVisual);
-
-	pWeaponVisual->CalculateBones_Invalidate();
-
-	auto ChangeBoneVisible = [&](const shared_str& bone, bool status, bool child = true)
-	{
-			u16 bone_id = pWeaponVisual->LL_BoneID(bone);
-
-			if (bone_id != BI_NONE)
-				pWeaponVisual->LL_SetBoneVisible(bone_id, status, child);
-	};
-
-	bool test = !!(get_ScopeStatus() == 2 && IsScopeAttached() || get_ScopeStatus() == 1);
-	ChangeBoneVisible(wpn_scope, test);
-
-	test = !!(get_SilencerStatus() == 2 && IsSilencerAttached() || get_SilencerStatus() == 1);
-	ChangeBoneVisible(wpn_silencer, test);
-
-	test = !!(get_GrenadeLauncherStatus() == 2 && IsGrenadeLauncherAttached() || get_GrenadeLauncherStatus() == 1);
-	ChangeBoneVisible(wpn_grenade_launcher, test);
-
-	for (auto& bone : m_bDefHideBones)
-	{
-		ChangeBoneVisible(bone, false, false);
-	}
-
-	for (auto& bone : m_bDefShowBones)
-	{
-		ChangeBoneVisible(bone, true, false);
-	}
-
+	IKinematics* Model = Visual()->dcast_PKinematics();
+	R_ASSERT(Model);
+	Model->CalculateBones_Invalidate();
 	if (m_bShowBonesUpgToHide.empty())
 	{
-		if (!!pSettings->line_exist(m_section_id.c_str(), "upgrades"))
+		LPCSTR Upgrades = READ_IF_EXISTS(pSettings, r_string, m_section_id, "upgrades", "");
+		for (int Index = 0, Count = _GetItemCount(Upgrades); Index < Count; ++Index)
 		{
-			const char* S = pSettings->r_string(m_section_id.c_str(), "upgrades");
-			if (S && S[0])
+			string256 Upgrade;
+			_GetItem(Upgrades, Index, Upgrade);
+			HideOneUpgradeLevel(Upgrade);
+		}
+	}
+	xr_vector<shared_str> InstalledShow;
+	for (const auto& Upgrade : m_upgrades)
+	{
+		LPCSTR Parameters = pSettings->r_string(Upgrade, "section");
+		WeaponBoneVisibility::VisitBoneList(Parameters, "show_bones", true, false, [&](const shared_str& Bone, bool, bool)
+		{
+			InstalledShow.push_back(Bone);
+			if (HudItemData())
 			{
-				string128 _Item;
-				int	count = _GetItemCount(S);
-				for (int it = 0; it < count; ++it)
-				{
-					_GetItem(S, it, _Item);
-					HideOneUpgradeLevel(_Item);
-				}
+				HudItemData()->set_bone_visible(Bone, true, true);
 			}
-		}
+		});
 	}
-
-	for (auto& bone : m_bShowBonesUpgToHide)
-	{
-		ChangeBoneVisible(bone, false, false);
-	}
-
-	for (auto& bone : m_bShowBonesUpgToShow)
-	{
-		ChangeBoneVisible(bone, true, false);
-	}
-
-	for (auto& bone : m_bHideBonesUpgrade)
-	{
-		ChangeBoneVisible(bone, false, false);
-	}
-
-	for (u32 i = 0; i < m_upgrades.size(); i++)
-	{
-		const char* section = pSettings->r_string(m_upgrades.at(i).c_str(), "section");
-
-		if (pSettings->line_exist(section, "show_bones"))
-			SetMultipleBonesStatus(section, "show_bones", true);
-
-	}
-
-	for (auto& bone : m_bHideBonesOverride)
-	{
-		ChangeBoneVisible(bone, false, false);
-	}
-
-	if (IsSilencerAttached())
-	{
-		for (auto& bone : m_bHideBonesSilAttached)
-		{
-			ChangeBoneVisible(bone, false, false);
-		}
-	}
-
-	if (IsSilencerAttached())
-	{
-		for (auto& bone : m_bDefHideBonesSilencerAttached)
-		{
-			ChangeBoneVisible(bone, false, false);
-		}
-	}
-
-	if (IsScopeAttached())
-	{
-		for (auto& bone : m_bHideBonesScopeAttached)
-		{
-			ChangeBoneVisible(bone, false, false);
-		}
-	}
-
-	if (IsScopeAttached())
-	{
-		for (auto& bone : m_bDefHideBonesScopeAttached)
-		{
-			ChangeBoneVisible(bone, false, false);
-		}
-	}
-
-	if (IsGrenadeLauncherAttached())
-	{
-		for (auto& bone : m_bHideBonesGLAttached)
-		{
-			ChangeBoneVisible(bone, false, false);
-		}
-	}
-
-	if (IsGrenadeLauncherAttached())
-	{
-		for (auto& bone : m_bDefHideBonesGLAttached)
-		{
-			ChangeBoneVisible(bone, false, false);
-		}
-	}
-
-	pWeaponVisual->CalculateBones_Invalidate();
-	pWeaponVisual->CalculateBones(true);
+	WeaponBoneVisibility::ApplyAddons(*Model, {
+		.HasScope = IsScopeAttached(),
+		.HasSilencer = IsSilencerAttached(),
+		.HasLauncher = IsGrenadeLauncherAttached(),
+		.DefaultHide = m_bDefHideBones,
+		.DefaultShow = m_bDefShowBones,
+		.UpgradeHide = m_bShowBonesUpgToHide,
+		.UpgradeShow = m_bShowBonesUpgToShow,
+		.InstalledHide = m_bHideBonesUpgrade,
+		.InstalledShow = InstalledShow,
+		.OverrideHide = m_bHideBonesOverride,
+		.SilencerHide = m_bHideBonesSilAttached,
+		.DefaultSilencerHide = m_bDefHideBonesSilencerAttached,
+		.ScopeHide = m_bHideBonesScopeAttached,
+		.DefaultScopeHide = m_bDefHideBonesScopeAttached,
+		.LauncherHide = m_bHideBonesGLAttached,
+		.DefaultLauncherHide = m_bDefHideBonesGLAttached
+	});
+	Model->CalculateBones_Invalidate();
+	Model->CalculateBones(true);
 }
 
 void CWeapon::InitAddons()
@@ -2960,11 +2806,6 @@ bool CWeapon::CanAimNow()
 
 	const static bool isDelayedWeaponActions = EngineExternal()[EEngineExternalGame::EnableDelayedWeaponActions];
 
-	if (!isDelayedWeaponActions && !m_eAnimationsFlags.test(EAnimationsFlags::af_aim_in_out))
-	{
-		return !IsZoomed();
-	}
-
 	bool result = true;
 
 	CCustomDevice* pDevice = pActor->GetDevice(true);
@@ -2973,6 +2814,11 @@ bool CWeapon::CanAimNow()
 	{
 		u8 state = pDevice->GetNextState();
 		result = pDevice->IsHidden() && !pDevice->NeedActivation() || !!(state == CCustomDevice::eIdle || state == CCustomDevice::EDeviceStates::eHandAimStart || state == CCustomDevice::EDeviceStates::eHandAimEnd);
+	}
+
+	if (!isDelayedWeaponActions && !m_eAnimationsFlags.test(EAnimationsFlags::af_aim_in_out))
+	{
+		return !IsZoomed() && result;
 	}
 
 	//if (m_eAnimationsFlags.test(EAnimationsFlags::af_sprint_in_out) && (pActor->GetMovementState(ACTOR_DEFS::EMovementStates::eReal) & ACTOR_DEFS::EMoveCommand::mcSprint || GetNextState() == eSprintStart || GetNextState() == eSprintEnd || m_bSwitchSprint))
@@ -3362,7 +3208,7 @@ CUIStatic* CWeapon::ZoomTexture()
 
 bool CWeapon::Allow3DScopes() const
 {
-	return psDeviceFlags.test(rsR4) && g_3d_scopes && m_Allow3DScope;
+	return g_3d_scopes && m_Allow3DScope;
 }
 
 bool CWeapon::UseScopeTexture()
@@ -3812,7 +3658,40 @@ void CWeapon::render_item_ui()
 	ZoomTexture()->Draw		();
 }
 
-bool CWeapon::unlimited_ammo() 
+bool CWeapon::ScopeEffectQuery()
+{
+	// Keep the same postprocess while the lens fades in or out during zoom animations.
+	return m_pInventory && m_pInventory->ActiveItem() == this && ParentIsActor() && GetHUDmode() &&
+		   Allow3DScopes() && IsScopeAttached() && IsLensedScopeInstalled() &&
+		   (IsZoomed() || m_zoom_params.m_fZoomRotationFactor > 0.0f) && !IsAltZoomed() && !IsGrenadeMode() &&
+		   m_zoom_params.m_fZoomRotationFactor2 == 0.0f;
+}
+
+bool CWeapon::ScopeUIQuery()
+{
+	return ScopeEffectQuery() && IsZoomed() && !IsRotatingToZoom() && m_zoom_params.m_sUseBinocularVision.size() > 0;
+}
+
+void CWeapon::RenderScopeUI()
+{
+	if (ScopeEffectQuery())
+	{
+		if (TWeaponNightVision* NightVision = GetComponent<TWeaponNightVision>())
+		{
+			NightVision->SwitchNightVision(false);
+			NightVision->UpdateScopePostprocess(GetNightPPEFactor());
+		}
+	}
+	if (ScopeUIQuery())
+	{
+		if (TBinocularsVision* Vision = GetComponent<TBinocularsVision>())
+		{
+			Vision->DrawScopeUI();
+		}
+	}
+}
+
+bool CWeapon::unlimited_ammo()
 { 
 	if (IsGameTypeSingle())
 	{
@@ -4356,6 +4235,9 @@ void CWeapon::UpdateAltScope()
 		cNameVisual_set(vis);
 	}
 
+	// Keep the icon synchronized with the world model selected by the scope.
+	m_3d_static_visual_name = READ_IF_EXISTS(pSettings, r_string, sectionNeedLoad, "3d_static_visual_name", vis.c_str());
+
 	shared_str new_hud = pSettings->r_string(sectionNeedLoad, "hud");
 	if (new_hud != hud_sect)
 	{
@@ -4468,6 +4350,66 @@ bool createWpnScopeXML()
 	return pWpnScopeXml->Load(CONFIG_PATH, UI_PATH, "scopes.xml");
 }
 
+void CWeapon::LoadScopeEffects(const char* Section)
+{
+	const shared_str OpticalSection = get_ScopeStatus() == ALife::eAddonPermanent ? cNameSect() : shared_str(Section);
+	const float WeaponAberration = READ_IF_EXISTS(pSettings, r_float, cNameSect(), "scope_abberation", 0.0f);
+	ScopeAberration = READ_IF_EXISTS(pSettings, r_float, OpticalSection, "scope_abberation", WeaponAberration);
+	const shared_str WeaponDetector = READ_IF_EXISTS(pSettings, r_string, cNameSect(), "scope_alive_detector", nullptr);
+	const shared_str WeaponNightVision = READ_IF_EXISTS(pSettings, r_string, cNameSect(), "scope_nightvision", nullptr);
+	const bool HasDynamicZoom = READ_IF_EXISTS(pSettings, r_bool, cNameSect(), "scope_dynamic_zoom", false);
+	m_zoom_params.m_sUseBinocularVision = READ_IF_EXISTS(pSettings, r_string, Section, "scope_alive_detector", WeaponDetector.c_str());
+	m_zoom_params.m_sUseZoomPostprocess = READ_IF_EXISTS(pSettings, r_string, Section, "scope_nightvision", WeaponNightVision.c_str());
+	m_zoom_params.m_bUseDynamicZoom = READ_IF_EXISTS(pSettings, r_bool, Section, "scope_dynamic_zoom", HasDynamicZoom);
+
+	for (const shared_str& Upgrade : m_upgrades)
+	{
+		const shared_str Parameters = pSettings->r_string(Upgrade, "section");
+		process_if_exists_set(Parameters.c_str(), "scope_alive_detector", m_zoom_params.m_sUseBinocularVision, false);
+		process_if_exists_set(Parameters.c_str(), "scope_nightvision", m_zoom_params.m_sUseZoomPostprocess, false);
+		process_if_exists_set(Parameters.c_str(), "scope_dynamic_zoom", m_zoom_params.m_bUseDynamicZoom, false);
+		process_if_exists_set(Parameters.c_str(), "scope_abberation", ScopeAberration, false);
+	}
+
+	RefreshScopeDetector();
+	RefreshScopeNightVision();
+}
+
+void CWeapon::RefreshScopeDetector()
+{
+	if (m_zoom_params.m_sUseBinocularVision.size() > 0)
+	{
+		if (TBinocularsVision* Vision = GetOrCreateComponent<TBinocularsVision>())
+		{
+			Vision->Load(m_zoom_params.m_sUseBinocularVision);
+		}
+	}
+	else if (!cast_weapon_binoculars())
+	{
+		DestroyComponent<TBinocularsVision>();
+	}
+}
+
+void CWeapon::RefreshScopeNightVision()
+{
+	if (m_zoom_params.m_sUseZoomPostprocess.size() > 0)
+	{
+		if (TWeaponNightVision* NightVision = GetOrCreateComponent<TWeaponNightVision>())
+		{
+			NightVision->SwitchNightVision(false);
+			NightVision->Load(m_zoom_params.m_sUseZoomPostprocess);
+		}
+	}
+	else
+	{
+		if (TWeaponNightVision* NightVision = GetComponent<TWeaponNightVision>())
+		{
+			NightVision->SwitchNightVision(false);
+			DestroyComponent<TWeaponNightVision>();
+		}
+	}
+}
+
 void CWeapon::LoadCurrentScopeParams(const char* section)
 {
 	shared_str scope_tex_name = "none";
@@ -4481,30 +4423,7 @@ void CWeapon::LoadCurrentScopeParams(const char* section)
 
 	m_zoom_params.m_fScopeZoomFactor = pSettings->r_float(section, "scope_zoom_factor");
 
-	if (bScopeIsHasTexture)
-	{
-		m_zoom_params.m_sUseZoomPostprocess = READ_IF_EXISTS(pSettings, r_string, section, "scope_nightvision", 0);
-		m_zoom_params.m_bUseDynamicZoom = READ_IF_EXISTS(pSettings, r_bool, section, "scope_dynamic_zoom", false);
-
-		m_zoom_params.m_sUseBinocularVision = READ_IF_EXISTS(pSettings, r_string, section, "scope_alive_detector", 0);
-
-		if (m_zoom_params.m_sUseBinocularVision.size() > 0)
-		{
-			if (TBinocularsVision* Vision = GetOrCreateComponent<TBinocularsVision>())
-			{
-				Vision->Load(m_zoom_params.m_sUseBinocularVision);
-			}
-		}
-
-		if (m_zoom_params.m_sUseZoomPostprocess.size() > 0)
-		{
-			if (TWeaponNightVision* NightVision = GetOrCreateComponent<TWeaponNightVision>())
-			{
-				NightVision->SwitchNightVision(false);
-				NightVision->Load(m_zoom_params.m_sUseZoomPostprocess);
-			}
-		}
-	}
+	LoadScopeEffects(section);
 
 	if (m_UIScope)
 	{
@@ -4859,6 +4778,28 @@ void CWeapon::LoadNightBrightnessParamsFromSection(shared_str sect)
 	m_lens_night_brightness.jitter = READ_IF_EXISTS(pSettings, r_float, sect, "jitter_brightness", 1.0f);
 	m_lens_night_brightness.min_factor = READ_IF_EXISTS(pSettings, r_float, sect, "scope_nightvision_min_factor", 0.0f);
 
+	u32 DefaultStep = READ_IF_EXISTS(pSettings, r_u32, sect, "default_brightness_step", m_lens_night_brightness.steps);
+	for (const shared_str& Upgrade : m_upgrades)
+	{
+		const shared_str Parameters = pSettings->r_string(Upgrade, "section");
+		float Value;
+		if (process_if_exists_set(Parameters.c_str(), "max_night_brightness", Value, false))
+		{
+			m_lens_night_brightness.max_value = Value / 3.0f;
+		}
+		if (process_if_exists_set(Parameters.c_str(), "min_night_brightness", Value, false))
+		{
+			m_lens_night_brightness.min_value = Value / 3.0f;
+		}
+		if (process_if_exists_set(Parameters.c_str(), "steps_brightness", m_lens_night_brightness.steps, false))
+		{
+			DefaultStep = m_lens_night_brightness.steps;
+		}
+		process_if_exists_set(Parameters.c_str(), "default_brightness_step", DefaultStep, false);
+		process_if_exists_set(Parameters.c_str(), "jitter_brightness", m_lens_night_brightness.jitter, false);
+		process_if_exists_set(Parameters.c_str(), "scope_nightvision_min_factor", m_lens_night_brightness.min_factor, false);
+	}
+
 	bool b_r2 = !!psDeviceFlags.test(rsR2);
 	b_r2 |= !!psDeviceFlags.test(rsR4);
 
@@ -4869,14 +4810,14 @@ void CWeapon::LoadNightBrightnessParamsFromSection(shared_str sect)
 
 	if (abs(m_lens_night_brightness.max_value - last.max_value) > EPS || fabs(m_lens_night_brightness.min_value - last.min_value) > EPS || m_lens_night_brightness.steps != last.steps)
 	{
-		if (m_lens_night_brightness.lens_night_brightness_saved_step >= 0)
+		if (m_lens_night_brightness.lens_night_brightness_saved_step >= 0 && m_lens_night_brightness.steps > 0)
 		{
 			m_lens_night_brightness.cur_step = m_lens_night_brightness.lens_night_brightness_saved_step;
 			m_lens_night_brightness.lens_night_brightness_saved_step = -1;
 		}
 		else
 		{
-			m_lens_night_brightness.cur_step = READ_IF_EXISTS(pSettings, r_u32, sect, "default_brightness_step", m_lens_night_brightness.steps);
+			m_lens_night_brightness.cur_step = DefaultStep;
 		}
 
 		SetNightBrightness(m_lens_night_brightness.cur_step, false);

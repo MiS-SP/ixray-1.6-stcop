@@ -10,6 +10,7 @@
 #include "FBasicVisual.h"
 #include "CHudInitializer.h"
 #include "SkeletonCustom.h"
+#include "dxRenderDeviceRender.h"
 #include "SVGStorage.h"
 
 using namespace		R_dsgraph;
@@ -209,6 +210,25 @@ ICF void RenderNode(mapSorted_Node& N, bool emissive = false)
 	VERIFY(V && V->shader._get());
 	RCache.set_Element(N.val.se);
 
+	if (auto* Constant = RCache.get_c("ui_emissive_tint")._get())
+	{
+		const auto* Settings = RImplementation.val_bUI ? Device.m_pRender->GetUIIconLighting() : nullptr;
+		if (Settings)
+		{
+			RCache.set_c(Constant, Settings->Color.x * Settings->Intensity, Settings->Color.y * Settings->Intensity, Settings->Color.z * Settings->Intensity, 1.0f);
+		}
+		else
+		{
+			RCache.set_c(Constant, 1.0f, 1.0f, 1.0f, 1.0f);
+		}
+	}
+
+	if (auto* Constant = RCache.get_c("ui_static_color")._get())
+	{
+		const Fcolor& Tint = dxRenderDeviceRender::Instance().UIIconTint;
+		RCache.set_c(Constant, Tint.r, Tint.g, Tint.b, Tint.a);
+	}
+
 #ifdef USE_DX11
 	if (emissive)
 	{
@@ -235,7 +255,8 @@ ICF void RenderNode(mapSorted_Node& N, bool emissive = false)
 	RImplementation.apply_object(N.val.pObject);
 	RImplementation.apply_lmaterial();
 
-	V->Render(calcLOD(N.val.ssa, V->vis.sphere.R));
+	// Icons are close-ups: always draw progressive meshes at full detail.
+	V->Render(RImplementation.val_bUI ? 1.0f : calcLOD(N.val.ssa, V->vis.sphere.R));
 }
 
 ICF void sorted_L1(mapSorted_Node* N)
@@ -260,7 +281,7 @@ void R_dsgraph_structure::r_dsgraph_render_ui()
 
 void R_dsgraph_structure::r_dsgraph_render_sorted_ui()
 {
-#if	RENDER!=R_R1
+#ifdef USE_DX11
 	RenderMap(mapUIEmissive);
 #endif
 
@@ -354,6 +375,24 @@ void R_dsgraph_structure::r_dsgraph_render_scope()
 
 	CHudInitializer initalizer(true);
 	RenderMap(mapHUDScopeMask);
+#else
+	ScopeSceneRequired = mapHUDScopeMask.size() > 0;
+	if (!ScopeSceneRequired)
+	{
+		return;
+	}
+
+	{
+		CHudInitializer initalizer(true, true);
+		RCache.set_ColorWriteEnable(false);
+		RCache.set_Stencil(TRUE, D3DCMP_ALWAYS, 0x80, 0x80, 0x80, D3DSTENCILOP_KEEP, D3DSTENCILOP_REPLACE, D3DSTENCILOP_KEEP);
+		RenderMap(mapHUDScopeMask);
+	}
+
+	RCache.set_Stencil(TRUE, D3DCMP_EQUAL, 0x80, 0x80, 0xff, D3DSTENCILOP_KEEP, D3DSTENCILOP_ZERO, D3DSTENCILOP_KEEP);
+	RImplementation.Target->RenderScopeDepthReset();
+	RCache.set_Stencil(FALSE);
+	RCache.set_ColorWriteEnable();
 #endif
 }
 
@@ -396,19 +435,6 @@ void	R_dsgraph_structure::r_dsgraph_render_subspace	(IRender_Sector* _sector, CF
 	CFrustum	ViewSave			= ViewBase;
 	ViewBase						= *_frustum;
 	View							= &ViewBase;
-
-	if (_precise_portals && RImplementation.rmPortals)		{
-		PROF_EVENT("precise_portals")
-		// Check if camera is too near to some portal - if so force DualRender
-		Fvector box_radius;		box_radius.set	(EPS_L*20,EPS_L*20,EPS_L*20);
-		RImplementation.Sectors_xrc.box_options	(CDB::OPT_FULL_TEST);
-		RImplementation.Sectors_xrc.box_query	(RImplementation.rmPortals,_cop,box_radius);
-		for (int K=0; K<RImplementation.Sectors_xrc.r_count(); K++)
-		{
-			CPortal*	pPortal		= (CPortal*) RImplementation.Portals[RImplementation.rmPortals->get_tris()[RImplementation.Sectors_xrc.r_begin()[K].id].dummy];
-			pPortal->bDualRender	= true;
-		}
-	}
 
 	// Traverse sector/portal structure
 	PortalTraverser.traverse		( _sector, ViewBase, _cop, mCombined, 0 );

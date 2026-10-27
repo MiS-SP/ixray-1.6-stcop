@@ -137,6 +137,7 @@ public:
 		u32	bWmark		:	1;
 		u32 bLandscape	:	1;
 		u32 bScopeMask	:	1;
+		u32 ScopePostprocess : 1;
 	};
 public:
 	Sflags								flags;
@@ -158,6 +159,8 @@ struct 	 ECORE_API	Shader			: public xr_resource_flagged									{
 public:
 	ref_selement		E		[SHADER_ELEMENTS_MAX];	// R1 - 0=norm_lod0(det),	1=norm_lod1(normal),	2=L_point,		3=L_spot,	4=L_for_models,	
 										// R2 - 0=deffer,			1=norm_lod1(normal),	2=psm,			3=ssm,		4=dsm
+
+	ref_selement UIElement;
 
 	Shader();
 	Shader& operator=(const Shader& Other) = delete;

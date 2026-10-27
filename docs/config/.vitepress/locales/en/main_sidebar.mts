@@ -49,6 +49,8 @@ export const mainSidebar: DefaultTheme.Sidebar = [
         text: 'Equipment',
         items: [
           { text: 'General information', link: '/en/gameplay/equipment/general-information' },
+            { text: 'Visor glass and rain drops', link: '/en/gameplay/equipment/visor-glass' },
+          { text: 'Night vision', link: '/en/gameplay/equipment/night-vision' },
           { text: 'Item upgrades', link: '/en/gameplay/equipment/item-upgrades' },
         ]
       }

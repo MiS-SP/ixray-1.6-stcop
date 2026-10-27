@@ -408,9 +408,6 @@
 	<string id="kb_clear_gasmask">
 		<text>Wipe mask</text>
 	</string>
-	<string id="ui_mm_mouse_sense_ui">
-		<text>Mouse sensitivity in UI</text>
-	</string>
 	<string id="ui_mm_r4_use_gasmask">
 		<text>Glass mask effect</text>
 	</string>
@@ -1013,5 +1010,14 @@
 	</string>
 	<string id="ui_rmw_wpn_laser">
 		<text>$$ACTION_WPN_LASER$$ Laser sight</text>
+	</string>
+	<string id="ui_mm_r2_rain_drops_mode">
+		<text>Glass rain drops type</text>
+	</string>
+	<string id="texture">
+		<text>Texture</text>
+	</string>
+	<string id="procedural">
+		<text>Procedural</text>
 	</string>
 </string_table>

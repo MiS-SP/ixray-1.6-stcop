@@ -5,6 +5,7 @@
 // ZFar  - always 1.0f
 
 #include "pure.h"
+#include "CameraManager.h"
 #include "../xrCore/FTimer.h"
 #include "Stats.h"
 
@@ -66,6 +67,7 @@ public:
 
 		float renderScopeBrightnessValue = 0.0f;
 		float renderScopeBrightnessJitterValue = 0.0f;
+		float ScopeAberration = 0.0f;
 
 		bool IsElectronicsProblemsDecreasing = false;
 		float CurrentElectronicsProblemsCnt = 0.0f;
@@ -76,6 +78,9 @@ public:
 		float ActorWeaponCondition = -1.0f;
 		float ActorWeaponLoading = 1.0f;
 	} hudViewportData;
+
+	SPPInfo ScopePostprocess;
+	bool ScopePostprocessActive = false;
 
 	// Engine flow-control
 	u32										dwFrame;

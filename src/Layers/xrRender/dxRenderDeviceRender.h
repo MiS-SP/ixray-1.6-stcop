@@ -52,6 +52,8 @@ public:
 	void End() override;
 	void ClearTarget() override;
 	void SetupDefaultTarget() override;
+	void InvalidateRenderCache() override;
+	UIIconLighting* GetUIIconLighting() override;
 	void SetCacheXform(Fmatrix &mView, Fmatrix &mProject) override;
 	virtual void SetCacheXformOld(Fmatrix &mView, Fmatrix &mProject);
 	void OnAssetsChanged() override;
@@ -70,4 +72,7 @@ public:
 	ref_shader			m_SelectionShader;
 	FactoryPtr<IUIShader> m_empty_default_shader;
 	CGammaControl		m_Gamma;
+	UIIconLighting IconLighting;
+	// D3D9 icons have no UI post-process pass, so their shaders apply the tint directly.
+	Fcolor UIIconTint = {1.0f, 1.0f, 1.0f, 1.0f};
 };

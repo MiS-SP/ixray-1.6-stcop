@@ -1,6 +1,8 @@
 #include "common.hlsli"
+#include "scope_ui.hlsli"
 
 uniform float4 m_hud_params;
+#include "scope_lens.hlsli"
 uniform float4 m_zoom_deviation;
 
 struct v2p
@@ -40,6 +42,7 @@ float parralax_fade(in float2 tc, in float3 Point)
 
 void main(v2p I, float4 pos2d : SV_POSITION, out IXRayForward O)
 {
+	O = (IXRayForward)0;
     if (m_hud_params.y * m_hud_params.a < 0.0001f)
 	{
 		discard;
@@ -58,8 +61,10 @@ void main(v2p I, float4 pos2d : SV_POSITION, out IXRayForward O)
     t_base = lerp(base2, t_base, m_zoom_deviation.z);
 	t_base.xyz = detonemap(t_base.xyz);
 	
-    float4 t_vp2 = s_image[pos2d.xy];
+    float4 t_vp2 = SampleScopeScene(I.tc0, pos2d.xy);
 	
+	t_vp2.xyz = ApplyScopeUI(t_vp2.xyz, pos2d.xy);
+
 	float alpha = m_hud_params.y * m_hud_params.a;
 	t_vp2.w = saturate(alpha * 2.0f - 1.0f);
 	t_vp2.xyz *= t_vp2.w * t_vp2.w * Fade;
@@ -70,6 +75,8 @@ void main(v2p I, float4 pos2d : SV_POSITION, out IXRayForward O)
 	float2 vel = 0.0f;
 	
     O.Color = float4(final.xyz, alpha);
+#ifndef DISABLE_MOTION_VECTORS
 	O.Velocity = float4(vel, 0.0f, t_base.a * alpha);
+#endif
 }
 

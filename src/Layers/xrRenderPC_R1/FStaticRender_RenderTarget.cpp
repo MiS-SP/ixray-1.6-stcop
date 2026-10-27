@@ -3,6 +3,8 @@
 #include "../../xrEngine/IGame_Persistent.h"
 #include "../xrRender/blender_fxaa.h"
 
+extern ENGINE_API bool turn_nvg;
+
 static LPCSTR		RTname			= "$user$rendertarget";
 static LPCSTR		RTTempName = "$user$rendertarget_temp";
 static LPCSTR		RTname_color_map= "$user$rendertarget_color_map";
@@ -71,6 +73,7 @@ bool CRenderTarget::Create()
 	}
 	
 	RT_ui_pda.create("$user$ui_pda", curWidth, curHeight, ERHI_FORMAT::B8G8R8X8_UNORM);
+	ScopeSceneTarget.create("$user$scope_scene", curWidth, curHeight, ERHI_FORMAT::B8G8R8X8_UNORM);
 
 	//FXAA
 	s_fxaa.create(b_fxaa, "r1\\fxaa");
@@ -132,7 +135,34 @@ bool CRenderTarget::Create()
 		if (RImplementation.o.distortion)	s_postprocess_D[1].create("postprocess_dcm");
 	}
 	g_postprocess.create				(D3DFVF_XYZRHW|D3DFVF_DIFFUSE|D3DFVF_SPECULAR|D3DFVF_TEX3,RCache.Vertex.Buffer(),RCache.QuadIB);
+	ScopeDepthResetShader.create("scope_depth_reset");
+	ScopeDepthResetGeom.create(FVF::F_TL, RCache.Vertex.Buffer(), RCache.QuadIB);
 	return	RT->valid() && RT_distort->valid();
+}
+
+void CRenderTarget::RenderScopeDepthReset()
+{
+	u32 Offset = 0;
+	const float Width = float(curWidth);
+	const float Height = float(curHeight);
+	const u32 Color = color_rgba(255, 255, 255, 255);
+	FVF::TL* Vertices = (FVF::TL*)RCache.Vertex.Lock(4, ScopeDepthResetGeom->vb_stride, Offset);
+	Vertices[0].set(0.0f, Height, 1.0f, 1.0f, Color, 0.0f, 1.0f);
+	Vertices[1].set(0.0f, 0.0f, 1.0f, 1.0f, Color, 0.0f, 0.0f);
+	Vertices[2].set(Width, Height, 1.0f, 1.0f, Color, 1.0f, 1.0f);
+	Vertices[3].set(Width, 0.0f, 1.0f, 1.0f, Color, 1.0f, 0.0f);
+	RCache.Vertex.Unlock(4, ScopeDepthResetGeom->vb_stride);
+
+	GRHI->StateManager->SetCullMode(ERHI_CULLMODE::NONE);
+	RCache.set_Element(ScopeDepthResetShader->E[0]);
+	RCache.set_Geometry(ScopeDepthResetGeom);
+	RCache.Render(ERHI_PRIMITIVE_TOPOLOGY::TRIANGLE_LIST, Offset, 0, 4, 0, 2);
+	GRHI->StateManager->SetCullMode(ERHI_CULLMODE::BACK);
+}
+
+void CRenderTarget::CopyScopeScene()
+{
+	GRHI->CopySurface(ScopeSceneTarget->pRT, RCache.get_RT());
 }
 
 void	CRenderTarget::u_setrt			(const ref_rt& _1, const ref_rt& _2, const ref_rt& _3, IRHIDepthStencilView* zb)
@@ -263,8 +293,8 @@ void CRenderTarget::calc_tc_duality_ss	(Fvector2& r0, Fvector2& r1, Fvector2& l0
 	Fvector2			shift,p0,p1;
 	shift.set			(.5f/tw, .5f/th);
 	shift.mul			(param_blur);
-	p0.set				(.5f/tw, .5f/th).add			(shift);
-	p1.set				((tw+.5f)/tw, (th+.5f)/th ).add	(shift);
+	p0.set				(shift.x,shift.y);
+	p1.set				(1.f,1.f);
 
 	// Calculate Duality TC
 	float	shift_u		= param_duality_h*.5f;
@@ -308,7 +338,7 @@ bool CRenderTarget::NeedPostProcess()
 		int		_b	= std::abs((int)(param_color_add.z*255));
 		if (_r>2 || _g>2 || _b>2)	_cadd	= true	;
 	}
-	return _blur || _gray || _noise || _dual || _cbase || _cadd || _cmap || _menu_pp; 
+	return turn_nvg || _blur || _gray || _noise || _dual || _cbase || _cadd || _cmap || _menu_pp;
 }
 
 bool CRenderTarget::Perform		()

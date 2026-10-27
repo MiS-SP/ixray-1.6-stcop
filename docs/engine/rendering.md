@@ -36,7 +36,7 @@ Main order:
 
 1. Offscreen reflections if `o.offscreen_reflecitons` and `!o.dx11_use_legacy_light`, with jitter cleared.
 2. TAA/upscaler jitter if `ps_r_scale_mode > 1` or `ps_r2_aa_type == 3`. Upscaler phases are `r4_rendertarget_phase_dlss.cpp`, `r4_rendertarget_phase_fsr.cpp`, and `r4_rendertarget_phase_xess.cpp`.
-3. Actor item UI into `rt_ui_pda`.
+3. Clear `rt_ui_pda` to transparent, then render actor item UI and the active 3D scope detector once into it.
 4. Clear `rt_Generic_0` and `rt_Velocity`, then render sky.
 5. Build `ViewBase`; run `HOM.Render` here unless `R2FLAG_EXP_MT_CALC` is set.
 6. Optional `R2FLAG_ZFILL` depth pass through `render_main(false, true)`.
@@ -46,6 +46,16 @@ Main order:
 10. Within combine, the renderer calls `render_forward` for forward geometry, puddles, and volumetric combine. Postprocessing is in `r4_rendertarget_phase_*.cpp`.
 
 Reflections and sun cascades are called from this render path. `PreRenderThread` runs `seqParallelRender`, rain item updates, and particle updates; it has no `CollectSunCascades` or `CollectReflections` delegates in this branch. GPU submission and swapchain operations stay on the primary thread.
+
+## 3D scope target detector
+
+With `g_3d_scopes on` on R4, a lensed scope enables target frames through `scope_alive_detector = scope_detector` in its scope section (or a weapon upgrade). The detector also works when there is no 2D `scope_texture`. The section `scope_detector` supplies `vis_frame_speed`, `vis_frame_color`, `found_snd`, and `catch_snd`, as in the 2D detector.
+
+`CActor::RenderScopeUI` routes the active first-person weapon to `TBinocularsVision::DrawScopeUI`. Visual-memory selection stays in the main frame update; rendering updates only target projection with the current world camera once per frame. The regular 2D UI query stays separate; switching to alternate aim, grenade mode, zooming out, or removing the scope leaves the shared texture clear of detector frames.
+
+Detector upgrades are applied after HUD/addon initialization. `LoadScopeEffects` resolves weapon and scope defaults, then installed upgrades, so `up_sect_wpn_gauss_detector` remains active after addon reloads and save loading. Upgrade previews do not apply the detector.
+
+`rt_ui_pda` (`$user$ui_pda`) uses RGBA16F to retain coverage alpha. `hud_scope_detector` writes linear premultiplied color with `ONE / INVSRCALPHA` blending, preserving overlapping frames. The scope shaders sample it in normalized screen coordinates, recover straight color and apply `lerp(World, UI.xyz, UI.w)` before scope fade and the reticle. Normalized coordinates keep the overlay aligned when render resolution differs from display resolution. Ordinary, variable-reticle, night-vision and Gauss scope materials bind `s_scope_ui` to the shared texture.
 
 ## R2 dynamic frame
 
@@ -68,3 +78,49 @@ Grass uses `CDetailManager` and `ps_r__detail_*` cvars. Renderer cvars register 
 R4 initializes `o.dx11_disable_motion_vectors` in `r4.cpp` from the `DISABLE_MOTION_VECTORS` entry in `EngineExternal().ShadersOptions`. It is not derived by a `NeedMotionVectors()` helper from AA, upscaler, or motion-blur cvars in this branch. Check the option, scene shader permutations, and `rt_Velocity` when debugging motion vectors; inspect the target with a windowed RenderDoc capture. Autotest launch details are in [lifecycle.md](lifecycle.md).
 
 Sources: [renderer loading](../../src/xrEngine/EngineAPI.cpp), [R4 frame](../../src/Layers/xrRenderPC_R4/r4_R_render.cpp), [R1 frame](../../src/Layers/xrRenderPC_R1/FStaticRender.cpp), [shader options](../../src/xrCore/EngineExternal.cpp).
+
+## Scope lens chromatic aberration
+
+R4 lens materials share `scope_lens.hlsli`. `SampleScopeScene` reads the scene snapshot and separates its red and blue samples in opposite diagonal directions using the Gunslinger edge-distance formula. The existing `m_hud_params.z` channel carries `scope_abberation`; both legacy constant binding and fixed constant buffers export the same value. No new GPU constant is introduced. Permanent scopes read the weapon's setting; detachable scopes use their own setting with the weapon as fallback. Installed upgrades are reapplied on scope reload.
+
+Sampling uses the source texture dimensions and clamps coordinates to its texel centers. At zero strength, the helper retains the original scene load and skips the extra texture samples. Scene sampling precedes material night vision, the reticle and detector UI. The helper is included by all four lens shaders in every game package.
+
+## Scope postprocess effects
+
+`scope_nightvision = scope_contrast` and `scope_nightvision = scope_nightvision_gauss` load the configured `.ppe` animation for the weapon. Installed scope effects are reapplied after addon initialization. For R4 3D scopes, the animator supplies an independent postprocess state; the lens material chooses whether R4 processes the world snapshot in `$user$accum` before rendering the lens, detector frames and reticle. Separate color-map aliases and noise timing leave the actor camera postprocess independent. The lens PPE stays active throughout normal zoom-in and zoom-out animations, until the zoom rotation factor reaches zero; switching implementations only after zoom completion would produce a bright material-NVG flash during the transition. Detector UI still requires fully completed zoom. Alternate aim and grenade mode disable the lens effect. `SPPInfo::lerp` adds to color-map influence and interpolation, gray, blur and duality, so `Device.ScopePostprocess` is reset to `pp_zero` before every `Process`, as `CCameraManager::UpdatePPEffectors` does for camera effectors; otherwise the color-map influence grows every frame and the lens turns white.
+
+The `models_zoomnight` lens receives the same configured PPE profile through the scope snapshot. Its `ScopePostprocessActive` constant is bound from the current renderer state when the lens pass is selected. When PPE is active, `model_scope_lense_night` skips its additional material night-vision amplification; applying both effects compounds the configured profile with the material's brightness and green gain before scene exposure. The material effect remains available when no PPE pass is active, and zero material brightness leaves the snapshot unchanged.
+
+The Lua material option `:scope_postprocess(false)` requests a raw world snapshot for the HUD scope; the default is `true`. R4 checks this flag on the queued HUD materials before preparing the snapshot. No weapon or profile names are checked in the game component or renderer. For the Gauss material, use `false` to let `model_scope_gauss` provide its own grayscale gain, blue tint, brightness jitter and electronics-interference noise. It uses the existing `s_tonemap` texture and tonemap functions to restore HDR color before composing the lens; no additional shader constant or binding is needed. The existing brightness steps remain active, and the 2D scope continues to use `nightvision_gauss.ppe`. Setting `true` selects the snapshot PPE when available; the Gauss shader uses the existing `ScopePostprocessActive` binding to skip its own amplification and tint, while retaining electronics-interference noise.
+
+D3D11 postprocess shaders sample color lookup tables and noise at mip level zero. Lookup-table sampling must not depend on screen-space brightness derivatives: selecting different mip levels across image edges produces bands. Noise coordinates use floating-point image-to-texture ratios to preserve grain size across resolutions.
+
+At zero brightness, the 2D weapon postprocess stays disabled. Recreating an expired zero-factor animator at full strength causes alternating bright/dark frames; enabled animators receive their factor immediately on creation. Brightness upgrades initialize their new control range and retain installed parameters across addon reloads. Saved brightness is consumed only after a nonzero control range is available.
+
+The 3D postprocess shaders convert the HDR world snapshot to display colors using the current exposure before evaluating the `.ppe` color table. They then invert tone mapping and exposure before returning the snapshot to the lens shader. This prevents the scene combine from applying exposure twice to display colors and washing out the scope. The conversion matches `combine_2` without the bloom term: exposure is divided by `bloom_amount + 1` (its square root with legacy lighting). Legacy lighting squares colors only to mix bloom and tone-maps the unsquared color, so the scope shaders must not square or take the square root around tone mapping: at high night exposure that brightens the lens to white.
+
+## Visor glass and rain drops
+
+Full equipment configuration, condition mapping, accumulation/reset rules, wiping animation setup, assets and troubleshooting: [English guide](../docs/main/en/gameplay/equipment/visor-glass.md) / [Russian guide](../docs/main/ru/gameplay/equipment/visor-glass.md).
+
+R2 and R4 use `r2_use_rain_drops` to enable visor droplets. `r2_rain_drops_mode texture` selects the existing normal-map effect; `procedural` selects animated procedural drop layers. Both appear in advanced video options and can be changed without restarting. Texture droplets remain the default. R1 does not draw these effects.
+
+An equipped helmet or outfit must have `glass_present = true`. A helmet with glass takes precedence over an outfit with glass. Glass is active only for the living actor in first-person view. `hud_gas_mask_avaliable` and `hud_rain_drops_avaliable` retain their existing spelling and independently control the glass and droplets. The base scientific outfit and protective helmet declare glass in the corresponding game packages.
+
+`hud_gas_mask_type = flat` is the default and selects ordinary flat glass. R4 uses ten normal maps selected by the equipped item's condition, plus cracks, refraction and reflections. `hud_gas_mask_type = curved` selects hemispherical glass with distortion towards the edges: the original four-stage `effector_gasmask` shader and its condensation effect. `r4_use_gasmask` controls both glass implementations. Flat glass draws the selected droplet implementation in its own pass; curved glass and disabled glass postprocess use a separate droplet pass. `VisorGlassType` carries the selected `Flat` or `Curved` type from equipment to the renderer.
+
+`IGame_Persistent::VisorRain` owns the accumulation state for both drop modes. The primary render thread checks for overhead cover once a second with a 50-metre upward ray, then changes coverage by 0.05 per second, capped by rain density. `CActor::ClearMaskCB`, called by the `Left` motion mark of `anm_gasmask` or the configured clear-mask animator, clears coverage. The dedicated item animator also invokes an unconsumed callback at natural completion; the HUD-item animation requires its motion mark. Drops accumulate again in rain and dry gradually under cover while rain continues. Rain stopping clears them immediately. Disabling droplets, removing or replacing the glass item, changing the view entity and disconnecting reset the state. This state is independent of weapon droplets and world wetness.
+
+The D3D11 shaders calculate procedural normals with finite differences. R2 computes height once and uses screen derivatives, scaled to the same normal strength, to fit within the minimum Shader Model 3 instruction limit. The shared algorithm is in `shaders/{r2,d3d11}/shared/VisorDrops.hlsli`; flat-glass damage textures are in `textures/shaders/gasmasks/`. The curved-glass shader and textures remain available.
+
+## Actor night vision
+
+R4's `nvg_render.ps.hlsl` uses three profiles selected by `shader_effect_range` in the equipped item's `nightvision_sect`. Profile color/gain and postprocessing parameters come from `shader_nvg_color` and `shader_nvg_postprocessing`; an explicit armor `nightvision_color` takes precedence. Profile changes through upgrades take effect on the next activation. Generation zero keeps the PPE route.
+
+`CNightVisionEffector` retains logical device state while electronics interference suppresses the shader. Actor updates reset only visor fields in `ShaderParams`; the night-vision profile persists between frames. Clearing the whole structure would zero its radial coefficient and turn the image black. `PhaseEffectSQ` derives a locally rate-limited `NightVisionInterference` from the current counter exported as `m_affects.x`, including immediate script updates when loading an emission. Initial activation uses the current counter directly. The shader fades through `smoothstep(0.02, 0.4, ...)`, with small downward pulses during the transition, and returns the original scene at complete suppression. Falling interference restores the effect. The exported electronics interface and other devices are unchanged.
+
+`CUIGameCustom::Render` maintains the single-instance `nv_tunnel` custom static with `hud/nvg_vignette.dds` while the actor is alive, in first-person view and has logically enabled, active night vision. Shader suppression leaves this UI mask visible. Manual switch-off, battery depletion and equipment removal use the existing device lifecycle; death and leaving first-person view hide the mask. Caption clearing recreates it on the next draw. No custom-static pointer is retained across UI resets. Weapon/scope night vision remains separate.
+
+Configuration, default coefficients, resource setup and manual verification: [English guide](../docs/main/en/gameplay/equipment/night-vision.md), [Russian guide](../docs/main/ru/gameplay/equipment/night-vision.md).
+
+Sources: [game effector](../../src/xrGame/EffectorNightVision.cpp), [armor profile](../../src/xrGame/ArmorBase.cpp), [portable device](../../src/xrGame/nvg.cpp), [UI lifecycle](../../src/xrGame/ui/UIGameCustom.cpp), [R4 pass](../../src/Layers/xrRenderPC_R4/r4_rendertarget_phase_screen_postprocess.cpp), [shader](../../gamedata/shaders/d3d11/nvg_render.ps.hlsl), [UI definition](../../gamedata/configs/ui/ui_custom_msgs.xml).

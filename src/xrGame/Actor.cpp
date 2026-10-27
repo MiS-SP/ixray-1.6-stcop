@@ -2052,7 +2052,7 @@ void CActor::UpdateCL()
 				else if (m_pObjectWeLookingAt &&
 						 m_pObjectWeLookingAt->cast_inventory_item() &&
 						 m_pObjectWeLookingAt->cast_inventory_item()->CanTake() &&
-						 pPickup->CanPickItem(Render->ViewBase, cam_FirstEye()->vPosition, m_pObjectWeLookingAt))
+						 pPickup->CanPickItem(CamPivot, m_pObjectWeLookingAt))
 				{
 					m_sDefaultObjAction = m_sInventoryItemUseAction;
 				}
@@ -2082,29 +2082,40 @@ void CActor::UpdateCL()
 		psHUD_Flags.set(HUD_CROSSHAIR_RT2, true);
 		psHUD_Flags.set(HUD_DRAW_RT, true);
 
-		g_pGamePersistent->ShaderParams.HelmetCondition = -1;
-		g_pGamePersistent->ShaderParams.ItemCfgHudGasMaskAvailable = true;
-		g_pGamePersistent->ShaderParams.ItemCfgHudRainDropsAvailable = true;
+		auto& Params = g_pGamePersistent->ShaderParams;
+		const u16 PreviousVisorItemId = Params.VisorItemId;
+		// Refresh only visor data; night vision parameters persist until the next activation.
+		Params.HelmetCondition = -1.f;
+		Params.ItemCfgHudGasMaskAvailable = false;
+		Params.ItemCfgHudRainDropsAvailable = false;
+		Params.GlassType = VisorGlassType::Flat;
+		Params.VisorItemId = u16(-1);
 
-		if (PIItem Helmet = inventory().ItemFromSlot(HELMET_SLOT))
+		if (g_Alive() && cam_active == eacFirstEye)
 		{
-			g_pGamePersistent->ShaderParams.HelmetCondition = Helmet->GetCondition();
-			CHelmet* CHM = Helmet->cast_helmet();
+			CArmorBase* GlassArmor = nullptr;
+			if (CHelmet* Helmet = GetHelmet(); Helmet && Helmet->GlassPresent)
+			{
+				GlassArmor = Helmet;
+			}
+			else if (CCustomOutfit* Outfit = GetOutfit(); Outfit && Outfit->GlassPresent)
+			{
+				GlassArmor = Outfit;
+			}
 
-			if (CHM) {
-				g_pGamePersistent->ShaderParams.ItemCfgHudGasMaskAvailable = CHM->IsHudGasMaskAvailable();
-				g_pGamePersistent->ShaderParams.ItemCfgHudRainDropsAvailable = CHM->IsHudRainDropsAvailable();
+			if (GlassArmor)
+			{
+				Params.HelmetCondition = GlassArmor->GetCondition();
+				Params.ItemCfgHudGasMaskAvailable = GlassArmor->IsHudGasMaskAvailable();
+				Params.ItemCfgHudRainDropsAvailable = GlassArmor->IsHudRainDropsAvailable();
+				Params.GlassType = GlassArmor->GetGlassType();
+				Params.VisorItemId = GlassArmor->ID();
 			}
 		}
-		else if (PIItem Outfit = inventory().ItemFromSlot(OUTFIT_SLOT))
-		{
-			CCustomOutfit* COF = Outfit->cast_outfit();
 
-			if (COF && !COF->bIsHelmetAvaliable) {
-				g_pGamePersistent->ShaderParams.HelmetCondition = Outfit->GetCondition();
-				g_pGamePersistent->ShaderParams.ItemCfgHudGasMaskAvailable = COF->IsHudGasMaskAvailable();
-				g_pGamePersistent->ShaderParams.ItemCfgHudRainDropsAvailable = COF->IsHudRainDropsAvailable();
-			}
+		if (PreviousVisorItemId != Params.VisorItemId)
+		{
+			g_pGamePersistent->VisorRain.Reset();
 		}
 	}
 
@@ -2214,6 +2225,7 @@ void CActor::UpdateCL()
 			Device.hudViewportData.ActorWeaponCondition = pWeapon->GetCondition();
 			Device.hudViewportData.renderScopeBrightnessValue = pWeapon->m_lens_night_brightness.cur_value;
 			Device.hudViewportData.renderScopeBrightnessJitterValue = pWeapon->m_lens_night_brightness.jitter;
+			Device.hudViewportData.ScopeAberration = pWeapon->ScopeAberration;
 		}
 	}
 	else
@@ -2229,6 +2241,7 @@ void CActor::UpdateCL()
 			Device.hudViewportData.ActorWeaponCondition = -1.0f;
 			Device.hudViewportData.renderScopeBrightnessValue = 0.0f;
 			Device.hudViewportData.renderScopeBrightnessJitterValue = 0.0f;
+			Device.hudViewportData.ScopeAberration = 0.0f;
 
 			// Switch back to third-person if was forced
 			if (bLook_cam_fp_zoom && cam_active == eacFirstEye) {
@@ -2897,6 +2910,21 @@ void CActor::RenderItemUI()
 			GetUICursor().OnRender();
 		}
 	}
+	else
+	{
+		RenderScopeUI();
+	}
+}
+
+void CActor::RenderScopeUI()
+{
+	if (CInventoryItem* Item = inventory().ActiveItem())
+	{
+		if (CWeapon* Weapon = Item->cast_weapon())
+		{
+			Weapon->RenderScopeUI();
+		}
+	}
 }
 
 bool CActor::renderable_ShadowGenerate	() 
@@ -3457,6 +3485,9 @@ float CActor::HitArtefactsOnBeltLegacy(float hit_power, ALife::EHitType hit_type
 
 float CActor::GetProtection_ArtefactsOnBelt(ALife::EHitType hit_type)
 {
+	if (EngineExternal().ShadowOfChernobylMode())
+		return 1.0f - HitArtefactsOnBeltLegacy(1.0f, hit_type);
+
 	float sum = 0.0f;
 
 	for (const PIItem item : inventory().m_belt)

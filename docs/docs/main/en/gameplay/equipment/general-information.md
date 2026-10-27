@@ -1,4 +1,7 @@
 # Gameplay: Inventory Items
+
+See [Night vision](night-vision.md) for shader generations, equipment profiles, the UI edge mask and electronics interference.
+
 ## Any Inventory Item (CInventoryItem)
 > [!IMPORTANT]
 > **Status**: Supported <br>
@@ -36,11 +39,13 @@ use_condition = false; Whether the item has a wear progress bar
 
 > [!IMPORTANT]
 > **Minimum Version**: 1.2.2
-* Console commands r_use_gasmask and r_use_rain_drops
+Current console commands: `r4_use_gasmask`, `r2_use_rain_drops` and `r2_rain_drops_mode`. See [Visor glass and rain drops](visor-glass.md) for glass types, item condition, accumulation and wiping animations in the current branch.
 
 ```ini
-hud_gas_mask_avaliable = true; Whether gas mask rendering is available
-hud_rain_drops_avaliable = true; Whether rain drops rendering is available
+glass_present = true; The item has visor glass
+hud_gas_mask_avaliable = true; Allow glass rendering
+hud_rain_drops_avaliable = true; Allow rain drops rendering
+hud_gas_mask_type = flat; flat (default) or curved
 ```
 
 > [!IMPORTANT]
@@ -62,10 +67,12 @@ forbid_change_skin = false ; Whether it changes the visual (hands/legs)
 
 > [!IMPORTANT]
 > **Minimum Version**: 1.2.2
-* Console commands r_use_gasmask and r_use_rain_drops
+Current console commands: `r4_use_gasmask`, `r2_use_rain_drops` and `r2_rain_drops_mode`. See [Visor glass and rain drops](visor-glass.md) for glass types, item condition, accumulation and wiping animations in the current branch.
 ```ini
-hud_gas_mask_avaliable = true; Whether gas mask rendering is available
-hud_rain_drops_avaliable = true; Whether rain drops rendering is available
+glass_present = true; The item has visor glass
+hud_gas_mask_avaliable = true; Allow glass rendering
+hud_rain_drops_avaliable = true; Allow rain drops rendering
+hud_gas_mask_type = flat; flat (default) or curved
 ```
 
 > [!IMPORTANT]

@@ -5,9 +5,36 @@
 #include "../Inventory.h"
 #include "../inventory_item.h"
 #include "../ui/UICellItem.h"
+#include "../ui/UIDragDropListEx.h"
 
 #include "../../xrCore/FS.h"
 #include "../../xrCore/EngineExternal.h"
+#include "../../xrUI/UI3dIconCache.h"
+
+void Render3DIconLightingControls()
+{
+	if (!ImGui::CollapsingHeader("3D icon lighting"))
+	{
+		return;
+	}
+	ImGui::Text("Shared icon models: %zu", UI3dIconCache::Instance().GetModelCount());
+	auto* Settings = Device.m_pRender->GetUIIconLighting();
+	if (!Settings)
+	{
+		ImGui::TextDisabled("Lighting controls are not supported by this renderer.");
+		return;
+	}
+	ImGui::ColorEdit3("Light color", &Settings->Color.x);
+	ImGui::DragFloat("Intensity", &Settings->Intensity, 0.02f, 0.0f, 16.0f);
+	ImGui::DragFloat("Ambient", &Settings->Ambient, 0.02f, 0.0f, 8.0f);
+	ImGui::DragFloat3("Direction", &Settings->Direction.x, 0.01f, -1.0f, 1.0f);
+	ImGui::SetItemTooltip("View-space direction. A zero vector uses the default (0, 0, 1).");
+	if (ImGui::Button("Reset icon lighting"))
+	{
+		*Settings = UIIconLighting{};
+	}
+	ImGui::TextDisabled("Applies to all 3D icons immediately. Settings last until restart.");
+}
 
 extern bool g_Adjust3dIcon;
 extern float g_Adjust3dIconValue;
@@ -87,12 +114,15 @@ namespace
 		Fvector rotate_deg{};
 		float scale = 1.0f;
 		shared_str visual;
+		Fvector2 Offset{};
+		Ivector2 GridSize{1, 1};
 	};
 
 	class CImGui3dIconAdjust
 	{
 	public:
 		void notify_hovered(CUICellItem* cell) { m_hovered_cell = cell; }
+		bool ShouldHideItemDescriptions() const { return HideItemDescriptions; }
 
 		void register_cell(CUICellItem* cell)
 		{
@@ -253,6 +283,7 @@ namespace
 				{
 					cell->SetXYZ(rotate);
 					cell->SetScaleFactor(m_scale);
+					cell->SetIconOffset(Offset);
 				}
 			}
 		}
@@ -263,7 +294,9 @@ namespace
 			{
 				if (cell && item_matches_target(static_cast<CInventoryItem*>(cell->m_pData)))
 				{
-					cell->SetVisual(m_visual_applied);
+					cell->SetIconVisual(m_visual_applied);
+					auto* Item = static_cast<CInventoryItem*>(cell->m_pData);
+					cell->SetBonesVisible(Item->object().Visual()->dcast_PKinematics());
 				}
 			}
 		}
@@ -296,6 +329,9 @@ namespace
 				rad2deg(m_target_item->m_3d_static_rotate.y),
 				rad2deg(m_target_item->m_3d_static_rotate.z));
 			m_scale = m_target_item->m_3d_static_scale;
+			Offset = m_target_item->IconOffset;
+			GridSize = m_target_item->GetInvGridRect().rb;
+			GridSizeBlocked = false;
 			m_visual_applied = m_target_item->m_3d_static_visual_name;
 			xr_strcpy(m_visual, sizeof(m_visual), safe_c_str(m_visual_applied));
 		}
@@ -313,10 +349,65 @@ namespace
 			{
 				item->m_3d_static_rotate.set(deg2rad(m_rotate_deg.x), deg2rad(m_rotate_deg.y), deg2rad(m_rotate_deg.z));
 				item->m_3d_static_scale = m_scale;
+				item->IconOffset = Offset;
 			}
 
 			update_cells_rotation_scale();
 			update_record();
+		}
+
+		bool ApplyGridSize()
+		{
+			const Ivector2 OldSize = m_target_item->GetInvGridRect().rb;
+			if (OldSize.x == GridSize.x && OldSize.y == GridSize.y)
+			{
+				GridSizeBlocked = false;
+				return true;
+			}
+			xr_vector<xr_pair<CUICellItem*, Ivector2>> Resized;
+			for (CUICellItem* Cell : m_cells)
+			{
+				if (!Cell || !item_matches_target(static_cast<CInventoryItem*>(Cell->m_pData)))
+				{
+					continue;
+				}
+				auto* List = Cell->OwnerList();
+				if (!Cell->IsOwnerListValid() || !List->IsOwner(Cell))
+				{
+					continue;
+				}
+				const Ivector2 PreviousSize = Cell->GetGridSize();
+				if (!List->TryResizeItem(Cell, GridSize))
+				{
+					for (auto It = Resized.rbegin(); It != Resized.rend(); ++It)
+					{
+						It->first->OwnerList()->TryResizeItem(It->first, It->second);
+					}
+					GridSize = OldSize;
+					GridSizeBlocked = true;
+					return false;
+				}
+				Resized.push_back({Cell, PreviousSize});
+			}
+			collect_target_items();
+			for (CInventoryItem* Item : m_target_items)
+			{
+				Irect Rect = Item->GetInvGridRect();
+				Rect.rb = GridSize;
+				Item->SetInvGridRect(Rect);
+			}
+			GridSizeBlocked = false;
+			for (CUICellItem* Cell : m_cells)
+			{
+				if (Cell && !Cell->OwnerList() && item_matches_target(static_cast<CInventoryItem*>(Cell->m_pData)))
+				{
+					const Ivector2 Previous = Cell->GetGridSize();
+					Cell->SetWndSize(Fvector2().set(Cell->GetWidth() * GridSize.x / Previous.x, Cell->GetHeight() * GridSize.y / Previous.y));
+					Cell->SetGridSize(GridSize);
+				}
+			}
+			update_record();
+			return true;
 		}
 
 		void apply_visual()
@@ -349,7 +440,13 @@ namespace
 			{
 				return;
 			}
-
+			auto w = READ_IF_EXISTS(pSettings, r_u32, safe_c_str(m_target_section), "inv_grid_width", 1);
+			auto h = READ_IF_EXISTS(pSettings, r_u32, safe_c_str(m_target_section), "inv_grid_height", 1);
+			GridSize.set((int)w, (int)h);
+			if (!ApplyGridSize())
+			{
+				return;
+			}
 			collect_target_items();
 
 			for (CInventoryItem* item : m_target_items)
@@ -376,6 +473,8 @@ namespace
 			record.rotate_deg = m_rotate_deg;
 			record.scale = m_scale;
 			record.visual = m_visual_applied;
+			record.Offset = Offset;
+			record.GridSize = GridSize;
 		}
 
 		const char* get_place_text(const CInventory& inventory, const CInventoryItem* item)
@@ -416,9 +515,13 @@ namespace
 		shared_str m_target_section;
 		xr_vector<CInventoryItem*> m_target_items;
 		bool m_follow_cursor = true;
+		bool HideItemDescriptions = false;
 
 		Fvector m_rotate_deg{};
 		float m_scale = 1.0f;
+		Fvector2 Offset{};
+		Ivector2 GridSize{1, 1};
+		bool GridSizeBlocked = false;
 		char m_visual[256] = {};
 		char m_filter[128] = {};
 		char m_place_text[32] = {};
@@ -590,6 +693,12 @@ namespace
 		Log(line);
 		xr_sprintf(line, "3d_static_scale\t\t\t= %f", m_scale);
 		Log(line);
+		xr_sprintf(line, "3d_static_offset\t\t= %f,%f", Offset.x, Offset.y);
+		Log(line);
+		xr_sprintf(line, "inv_grid_width\t\t\t= %d", GridSize.x);
+		Log(line);
+		xr_sprintf(line, "inv_grid_height\t\t\t= %d", GridSize.y);
+		Log(line);
 	}
 
 	void CImGui3dIconAdjust::copy_to_clipboard() const
@@ -603,9 +712,12 @@ namespace
 		xr_sprintf(text, "[%s]\n"
 			"3d_static_visual_name = %s\n"
 			"3d_static_rotate = %.3f, %.3f, %.3f\n"
-			"3d_static_scale = %.3f",
+			"3d_static_scale = %.3f\n"
+			"3d_static_offset = %.3f, %.3f\n"
+			"inv_grid_width = %d\n"
+			"inv_grid_height = %d",
 			safe_c_str(m_target_item->m_section_id), m_visual,
-			m_rotate_deg.x, m_rotate_deg.y, m_rotate_deg.z, m_scale);
+			m_rotate_deg.x, m_rotate_deg.y, m_rotate_deg.z, m_scale, Offset.x, Offset.y, GridSize.x, GridSize.y);
 
 		ImGui::SetClipboardText(text);
 	}
@@ -628,6 +740,9 @@ namespace
 			file.w_string(section.c_str(), "3d_static_visual_name", safe_c_str(record.visual));
 			file.w_fvector3(section.c_str(), "3d_static_rotate", record.rotate_deg);
 			file.w_float(section.c_str(), "3d_static_scale", record.scale);
+			file.w_fvector2(section.c_str(), "3d_static_offset", record.Offset);
+			file.w_u32(section.c_str(), "inv_grid_width", record.GridSize.x);
+			file.w_u32(section.c_str(), "inv_grid_height", record.GridSize.y);
 		}
 
 		m_last_saved_path = path;
@@ -640,6 +755,8 @@ namespace
 			ImGuiEditorUI_HelpBullet("3d_static_visual_name - model for the 3D icon. If missing, the world model (visual) is used.");
 			ImGuiEditorUI_HelpBullet("3d_static_rotate - rotation by X, Y, Z in degrees.");
 			ImGuiEditorUI_HelpBullet("3d_static_scale - icon size in the inventory.");
+			ImGuiEditorUI_HelpBullet("3d_static_offset - X/Y displacement relative to icon width/height. Positive X moves right, positive Y moves down.");
+			ImGuiEditorUI_HelpBullet("inv_grid_width / inv_grid_height - occupied inventory cells. inv_grid_x / inv_grid_y remain atlas coordinates.");
 		}
 
 		if (ImGui::CollapsingHeader("Keyboard (Adjust mode)"))
@@ -654,6 +771,7 @@ namespace
 	void CImGui3dIconAdjust::draw()
 	{
 		validate_target();
+		Render3DIconLightingControls();
 
 		if (!EngineExternal()[EEngineExternalGame::Enable3DIcons])
 		{
@@ -677,6 +795,8 @@ namespace
 		}
 
 		ImGui::SeparatorText("Target");
+		ImGui::Checkbox("Hide item description", &HideItemDescriptions);
+		ImGui::SetItemTooltip("Hide item description windows while this editor is open. Closing the editor restores descriptions.");
 
 		ImGui::Checkbox("Follow cursor", &m_follow_cursor);
 		ImGui::SetItemTooltip("Select the item under the cursor automatically");
@@ -748,6 +868,23 @@ namespace
 
 		changed |= ImGui::DragFloat("Scale##3d_static_scale", &m_scale, scale_step, 0.01f, 100.0f, "%.4f");
 
+		ImGui::SeparatorText("Position inside icon");
+		changed |= ImGui::DragFloat("X##3d_static_offset", &Offset.x, 0.005f, -1.0f, 1.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp);
+		changed |= ImGui::DragFloat("Y##3d_static_offset", &Offset.y, 0.005f, -1.0f, 1.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp);
+		ImGui::TextDisabled("Relative to icon size: 0.1 = 10%%. Positive X/Y moves right/down.");
+
+		ImGui::SeparatorText("Inventory cells");
+		bool GridChanged = ImGui::DragInt("inv_grid_width", &GridSize.x, 1.0f, 1, 64, "%d", ImGuiSliderFlags_AlwaysClamp);
+		GridChanged |= ImGui::DragInt("inv_grid_height", &GridSize.y, 1.0f, 1, 64, "%d", ImGuiSliderFlags_AlwaysClamp);
+		if (GridChanged)
+		{
+			ApplyGridSize();
+		}
+		if (GridSizeBlocked)
+		{
+			ImGui::TextWrapped("Cannot resize: stop dragging and free neighbouring cells or move the item away from the grid edge.");
+		}
+
 		if (changed)
 		{
 			apply_rotation_scale();
@@ -802,7 +939,7 @@ namespace
 					ImGui::TableSetColumnIndex(0);
 					ImGui::TextUnformatted(it->first.c_str());
 					ImGui::TableSetColumnIndex(1);
-					ImGui::Text("%.1f, %.1f, %.1f | %.3f", it->second.rotate_deg.x, it->second.rotate_deg.y, it->second.rotate_deg.z, it->second.scale);
+					ImGui::Text("%.1f, %.1f, %.1f | %.3f | offset %.3f, %.3f | %dx%d cells", it->second.rotate_deg.x, it->second.rotate_deg.y, it->second.rotate_deg.z, it->second.scale, it->second.Offset.x, it->second.Offset.y, it->second.GridSize.x, it->second.GridSize.y);
 
 					ImGui::PushID(it->first.c_str());
 					ImGui::SameLine();
@@ -859,6 +996,12 @@ void Render3DIconAdjust()
 void Icon3dAdjust_NotifyHoveredCell(CUICellItem* cell)
 {
 	g_icon3d_adjust.notify_hovered(cell);
+}
+
+bool ShouldHide3DIconItemDescriptions()
+{
+	return Engine.External.EditorStates[static_cast<u8>(EditorUI::Game_3DIconAdjust)]
+		&& g_icon3d_adjust.ShouldHideItemDescriptions();
 }
 
 void Icon3dAdjust_RegisterCell(CUICellItem* cell)

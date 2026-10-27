@@ -42,6 +42,9 @@ bool CWeapon::install_upgrade_impl(const char* section, bool test)
 	result |= process_if_exists_set(section, "use_revolver_scheme", m_bUseRevolverScheme, test);
 	result |= process_if_exists_set(section, "use_mosin_scheme", m_bUseMosinScheme, test);
 
+	result |= process_if_exists_set(section, "misfire_after_problems_level", m_fMisfireAfterProblemsLevel, test);
+	result |= InstallScopeEffectsUpgrade(section, test);
+
 	return result;
 }
 
@@ -317,26 +320,6 @@ bool CWeapon::install_upgrade_addon(const char* section, bool test)
 			}
 		}
 	}
-	result |= process_if_exists_set(section, "scope_dynamic_zoom", m_zoom_params.m_bUseDynamicZoom, test);
-	result |= process_if_exists_set(section, "scope_nightvision", m_zoom_params.m_sUseZoomPostprocess, test);
-	result |= process_if_exists_set(section, "scope_alive_detector", m_zoom_params.m_sUseBinocularVision, test);
-
-	if (m_zoom_params.m_sUseBinocularVision.size() > 0)
-	{
-		if (TBinocularsVision* Vision = GetOrCreateComponent<TBinocularsVision>())
-		{
-			Vision->Load(m_zoom_params.m_sUseBinocularVision);
-		}
-	}
-
-	if (m_zoom_params.m_sUseZoomPostprocess.size() > 0)
-	{
-		if (TWeaponNightVision* NightVision = GetOrCreateComponent<TWeaponNightVision>())
-		{
-			NightVision->SwitchNightVision(false);
-			NightVision->Load(m_zoom_params.m_sUseZoomPostprocess);
-		}
-	}
 
 	result |= result2;
 
@@ -377,6 +360,26 @@ bool CWeapon::install_upgrade_addon(const char* section, bool test)
 
 	result |= result2;
 	return result;
+}
+
+bool CWeapon::InstallScopeEffectsUpgrade(const char* Section, bool IsTest)
+{
+	const bool HasDetector = process_if_exists_set(Section, "scope_alive_detector", m_zoom_params.m_sUseBinocularVision, IsTest);
+	const bool HasNightVision = process_if_exists_set(Section, "scope_nightvision", m_zoom_params.m_sUseZoomPostprocess, IsTest);
+	const bool HasDynamicZoom = process_if_exists_set(Section, "scope_dynamic_zoom", m_zoom_params.m_bUseDynamicZoom, IsTest);
+	const bool HasAberration = process_if_exists_set(Section, "scope_abberation", ScopeAberration, IsTest);
+	if (!IsTest)
+	{
+		if (HasDetector)
+		{
+			RefreshScopeDetector();
+		}
+		if (HasNightVision)
+		{
+			RefreshScopeNightVision();
+		}
+	}
+	return HasDetector || HasNightVision || HasDynamicZoom || HasAberration;
 }
 
 bool CWeapon::install_upgrade_hud_sect(const char* section, bool test)
@@ -724,6 +727,10 @@ bool CWeapon::install_upgrade_scope_zoom(const char* section, bool test)
 		{
 			m_lens_night_brightness.cur_step = m_lens_night_brightness.lens_night_brightness_saved_step;
 			m_lens_night_brightness.lens_night_brightness_saved_step = -1;
+		}
+		else if (last.steps == 0 && m_lens_night_brightness.steps > 0)
+		{
+			m_lens_night_brightness.cur_step = READ_IF_EXISTS(pSettings, r_u32, section, "default_brightness_step", m_lens_night_brightness.steps);
 		}
 
 		SetNightBrightness(m_lens_night_brightness.cur_step, false);

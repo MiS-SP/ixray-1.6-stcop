@@ -236,7 +236,7 @@ void R_dsgraph_structure::r_dsgraph_insert_dynamic(dxRender_Visual* pVisual, Fve
 
 	ShaderElement* sh_d = pVisual->shader->E[4] ? &*pVisual->shader->E[4] : nullptr;
 
-	if (RImplementation.o.distortion && sh_d && sh_d->flags.bDistort && pmask[sh_d->flags.iPriority / 2] && !psDeviceFlags.test(rsClearBB))
+	if (!RI.val_bUI && RImplementation.o.distortion && sh_d && sh_d->flags.bDistort && pmask[sh_d->flags.iPriority / 2] && !psDeviceFlags.test(rsClearBB))
 	{
 		mapSorted_T& test = bHUD ? mapHUDDistort : mapDistort;
 		mapSorted_Node* N = test.insertInAnyWay(distSQ);
@@ -270,12 +270,12 @@ void R_dsgraph_structure::r_dsgraph_insert_dynamic(dxRender_Visual* pVisual, Fve
 		else
 		{
 			mapUI.insertInAnyWay(distSQ, { SSA, RI.val_pObject, pVisual, *RI.val_pTransform, sh });
-#if RENDER!=R_R1
+#ifdef USE_DX11
 			if (sh->flags.bEmissive && sh != sh_d)
 			{
 				mapUIEmissive.insertInAnyWay(distSQ, { SSA, RI.val_pObject, pVisual, *RI.val_pTransform, sh_d });
 			}
-#endif	//	RENDER!=R_R1
+#endif
 		}
 
 		return;

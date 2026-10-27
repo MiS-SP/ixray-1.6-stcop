@@ -29,6 +29,7 @@
 #include "../eatable_item.h"
 #include "UICellItem.h"
 #include "UIGrenadeParams.h"
+#include "../ImUtils/ImUtils.h"
 
 extern const char* g_inventory_upgrade_xml;
 
@@ -392,6 +393,7 @@ void CUIItemInfo::InitItem(CUICellItem* pCellItem, CInventoryItem* pCompareItem,
         {
             UIItemImage->SetVisual(pInvItem->m_3d_static_visual_name);
             UIItemImage->SetScaleFactor(pInvItem->m_3d_static_scale);
+            UIItemImage->SetIconOffset(pInvItem->IconOffset);
             UIItemImage->SetXYZ(pInvItem->m_3d_static_rotate);
 			UIItemImage->SetBonesVisible(pInvItem->object().Visual()->dcast_PKinematics());
         }
@@ -528,6 +530,10 @@ void CUIItemInfo::TryAddBoosterInfo(CInventoryItem& pInvItem)
 
 void CUIItemInfo::Draw()
 {
+	if (ShouldHide3DIconItemDescriptions())
+	{
+		return;
+	}
 	if(m_pInvItem)
 		inherited::Draw();
 }

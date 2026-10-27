@@ -87,6 +87,12 @@ public:
 	adopt_compiler&			_dx10texture	(const char* _resname, const char* _texname)		{	C->r_dx10Texture(_resname, _texname);		return	*this;		}
 	adopt_dx10sampler		_dx10sampler	(const char* _name)							{	u32 s = C->r_dx10Sampler(_name);			return	adopt_dx10sampler(C,s);	}
 
+	adopt_compiler& ScopePostprocess(bool Enabled)
+	{
+		C->SH->flags.ScopePostprocess = Enabled;
+		return *this;
+	}
+
 	//	DX10 specific
 	adopt_compiler&			_dx10color_write_enable (bool cR, bool cG, bool cB, bool cA)		{	C->r_ColorWriteEnable(cR, cG, cB, cA);		return	*this;		}
 	adopt_compiler&			_dx10Stencil	(bool Enable, u32 Func, u32 Mask, u32 WriteMask, u32 Fail, u32 Pass, u32 ZFail) {C->r_Stencil(Enable, Func, Mask, WriteMask, Fail, Pass, ZFail);		return	*this;		}
@@ -172,6 +178,7 @@ void	CResourceManager::LS_Load			()
 			.def("sorting",						&adopt_compiler::_options		,return_reference_to<1>())
 			.def("emissive",					&adopt_compiler::_o_emissive	,return_reference_to<1>())
 			.def("scope",						&adopt_compiler::_o_scope		,return_reference_to<1>())
+			.def("scope_postprocess", &adopt_compiler::ScopePostprocess, return_reference_to<1>())
 			.def("distort",						&adopt_compiler::_o_distort		,return_reference_to<1>())
 			.def("wmark",						&adopt_compiler::_o_wmark		,return_reference_to<1>())
 			.def("fog",							&adopt_compiler::_fog			,return_reference_to<1>())
@@ -320,6 +327,14 @@ Shader* CResourceManager::_lua_Create(const char* d_shader, const char* s_textur
 			C.bDetail			= dxRenderDeviceRender::Instance().Resources->m_textures_description.GetDetailTexture(C.L_textures[0],C.detail_texture,C.detail_scaler);
 			S.E[0]				= C._lua_Compile(s_shader,"normal");
 		}
+	}
+
+	// Compile the UI variant with the same detail lookup as the normal pass.
+	if (Script::bfIsObjectPresent(LSVM, s_shader, "normal_ui", LUA_TFUNCTION))
+	{
+		C.iElement = SE_R2_UI;
+		C.bDetail = DEV->m_textures_description.GetDetailTexture(C.L_textures[0], C.detail_texture, C.detail_scaler);
+		S.UIElement = C._lua_Compile(s_shader, "normal_ui");
 	}
 
 	// Compile element (HUD)

@@ -1,5 +1,6 @@
-#include "ScreenshotManager.h"
 #include "stdafx.h"
+#include "ScreenshotManager.h"
+#include "AsyncScreenshotService.h"
 
 #ifdef IXR_WINDOWS
 #	include <wincodec.h>
@@ -16,6 +17,65 @@ extern int SM_FOR_SEND_WIDTH;
 extern int SM_FOR_SEND_HEIGHT;
 using namespace DirectX;
 
+static xr_unique_ptr<AsyncScreenshotService> g_AsyncScreenshots;
+static xr_unique_ptr<xr_vector<xr_string>> g_PendingGameSaveScreenshots;
+
+void ScreenshotManager::Flush()
+{
+	CapturePendingScreenshot();
+	if (g_AsyncScreenshots)
+	{
+		g_AsyncScreenshots->Process(true);
+	}
+}
+
+void ScreenshotManager::Shutdown()
+{
+	Flush();
+	g_AsyncScreenshots.reset();
+	g_PendingGameSaveScreenshots.reset();
+}
+
+bool ScreenshotManager::HasPendingScreenshot = false;
+
+void ScreenshotManager::RequestScreenshot()
+{
+	HasPendingScreenshot = true;
+}
+
+void ScreenshotManager::RequestGameSaveScreenshot(const char* Name)
+{
+	if (!Name || !Name[0])
+	{
+		return;
+	}
+	if (!g_PendingGameSaveScreenshots)
+	{
+		g_PendingGameSaveScreenshots = xr_make_unique<xr_vector<xr_string>>();
+	}
+	g_PendingGameSaveScreenshots->emplace_back(Name);
+}
+
+void ScreenshotManager::CapturePendingScreenshot()
+{
+	if (HasPendingScreenshot)
+	{
+		HasPendingScreenshot = false;
+		SaveScreenshot(IRender_interface::SM_NORMAL, nullptr);
+	}
+	if (g_PendingGameSaveScreenshots)
+	{
+		for (const auto& Name : *g_PendingGameSaveScreenshots)
+		{
+			SaveScreenshot(IRender_interface::SM_FOR_GAMESAVE, Name.c_str());
+		}
+		g_PendingGameSaveScreenshots->clear();
+	}
+	if (g_AsyncScreenshots)
+	{
+		g_AsyncScreenshots->Process();
+	}
+}
 
 bool ScreenshotManager::SaveScreenshot(IRender_interface::ScreenshotMode Mode, const char* Name, CMemoryWriter* MemoryWriter)
 {
@@ -24,7 +84,19 @@ bool ScreenshotManager::SaveScreenshot(IRender_interface::ScreenshotMode Mode, c
 		return false;
 	}
 
-	IRHIRenderTargetView* Rtv = GRHI->GetRenderTargetView(0);
+#ifndef _EDITOR
+	if (!MemoryWriter && RTarget && (Mode == IRender_interface::SM_NORMAL || Mode == IRender_interface::SM_FOR_GAMESAVE))
+	{
+		if (!g_AsyncScreenshots)
+		{
+			g_AsyncScreenshots = xr_make_unique<AsyncScreenshotService>();
+		}
+		return g_AsyncScreenshots->Queue(Mode, Name);
+	}
+#endif
+
+	const bool IsGameCapture = Mode == IRender_interface::SM_NORMAL || Mode == IRender_interface::SM_FOR_GAMESAVE || Mode == IRender_interface::SM_FOR_MPSENDING;
+	IRHIRenderTargetView* Rtv = IsGameCapture ? RTarget : GRHI->GetRenderTargetView(0);
 	if (Rtv == nullptr)
 	{
 		Rtv = RTarget;
@@ -62,7 +134,15 @@ bool ScreenshotManager::SaveScreenshot(IRender_interface::ScreenshotMode Mode, c
 
 	for (u32 Y = 0; Y < Height; ++Y)
 	{
-		memcpy(DstPixels + (size_t)Y * DstRow, Buffer.get() + (size_t)Y * RowPitch, DstRow);
+		u8* Row = DstPixels + (size_t)Y * DstRow;
+		memcpy(Row, Buffer.get() + (size_t)Y * RowPitch, DstRow);
+		if (IsGameCapture)
+		{
+			for (u32 X = 0; X < Width; ++X)
+			{
+				Row[size_t(X) * 4 + 3] = 0xff;
+			}
+		}
 	}
 
 #ifdef IXR_LINUX
