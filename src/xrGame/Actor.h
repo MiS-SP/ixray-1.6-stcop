@@ -22,6 +22,7 @@
 #include "EffectorNightVision.h"
 #include "HudAnimatorManager.h"
 #include "nvg.h"
+#include "WeaponsModifiers.h"
 
 using namespace ACTOR_DEFS;
 
@@ -91,6 +92,7 @@ private:
 	typedef CEntityAlive	inherited;
 	CPickUpManager* pPickup = nullptr;
 	CAutoAim* pAutoaim = nullptr;
+	WeaponsModifiers WeaponModifiers;
 
 	const char* m_onBeforeHitCallback = {};
 	bool m_isBeforeHitCallback = false;
@@ -98,6 +100,8 @@ public:
 										CActor				();
 	virtual								~CActor				();
 	void OnFrame();
+	const WeaponsModifiers& GetActorWeaponModifiers() const { return WeaponModifiers; }
+	bool SetActorWeaponModifier(WeaponModifier Type, float Value) { return WeaponModifiers.SetCoefficient(Type, Value); }
 	THudVertexAssignedPatricles* GetHudVertexAssignedPatriclesComponent();
 
 									public:

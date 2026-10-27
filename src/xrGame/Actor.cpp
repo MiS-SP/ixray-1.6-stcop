@@ -303,6 +303,7 @@ THudVertexAssignedPatricles* CActor::GetHudVertexAssignedPatriclesComponent()
 
 void CActor::reinit	()
 {
+	WeaponModifiers = {};
 	character_physics_support()->movement()->CreateCharacter		();
 	character_physics_support()->movement()->SetPhysicsRefObject	(this);
 	CEntityAlive::reinit						();

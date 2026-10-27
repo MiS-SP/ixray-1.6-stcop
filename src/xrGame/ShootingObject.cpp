@@ -25,7 +25,6 @@ CShootingObject::CShootingObject()
  	fOneShotTime						= 0;
 	//fHitPower						= 0.0f;
 	fvHitPower.set					(0.0f,0.0f,0.0f,0.0f);
-	fvBaseHitPower.set				(0.0f,0.0f,0.0f,0.0f);
 	fvHitPowerCritical.set			(0.0f,0.0f,0.0f,0.0f);
 	m_fStartBulletSpeed				= 1000.f;
 
@@ -146,11 +145,6 @@ void CShootingObject::LoadFireParams( const char* section )
 	{
 		fvHitPower[egdNovice]	= (float)atof(_GetItem(*s_sHitPower,3,buffer));//то вычитываем его для уровня новичка
 	}
-	fvBaseHitPower = fvHitPower;
-
-	m_actorBaseHitPowerBonus = READ_IF_EXISTS(pSettings, r_float, section, "actor_base_hit_power_bonus", 0.0f);
-	m_actorBaseHitPowerBonusInfo =
-		READ_IF_EXISTS(pSettings, r_string, section, "actor_base_hit_power_bonus_info", "");
 
 	num_game_diff_param=_GetItemCount(*s_sHitPowerCritical);//узнаём колличество параметров
 	if (num_game_diff_param>1)//если задан второй параметр хита
@@ -552,17 +546,14 @@ void CShootingObject::FireBullet(const Fvector& pos,
 		is_actor_singleplayer ? g_SingleGameDifficulty : egdMaster;
 	float l_fHitPower = fvHitPower[hit_power_difficulty];
 
-	if (is_actor_singleplayer && m_actorBaseHitPowerBonus != 0.0f &&
-		m_actorBaseHitPowerBonusInfo.size() && Actor()->HasInfo(m_actorBaseHitPowerBonusInfo))
-	{
-		l_fHitPower += fvBaseHitPower[hit_power_difficulty] * m_actorBaseHitPowerBonus;
-	}
+	const WeaponsModifiers& Modifiers = GetActorWeaponModifiers();
+	l_fHitPower = Modifiers.ApplyHitPower(l_fHitPower, fire_mode == eSilencerFire);
 
 	Level().BulletManager().AddBullet( pos, 
 										dir,
-										m_fStartBulletSpeed * cur_silencer_koef.bullet_speed,
+										Modifiers.ApplyBulletSpeed(m_fStartBulletSpeed * cur_silencer_koef.bullet_speed),
 										l_fHitPower * cur_silencer_koef.hit_power,
-										fHitImpulse * cur_silencer_koef.hit_impulse,
+										Modifiers.ApplyHitImpulse(fHitImpulse * cur_silencer_koef.hit_impulse),
 										parent_id, 
 										weapon_id,
 										ALife::eHitTypeFireWound, 
@@ -572,6 +563,17 @@ void CShootingObject::FireBullet(const Fvector& pos,
 										send_hit, 
 										aim_bullet);
 }
+const WeaponsModifiers& CShootingObject::GetActorWeaponModifiers() const
+{
+	static const WeaponsModifiers DefaultModifiers;
+	return DefaultModifiers;
+}
+
+float CShootingObject::GetModifiedShotInterval(float Interval) const
+{
+	return GetActorWeaponModifiers().ApplyShotInterval(Interval);
+}
+
 void CShootingObject::FireStart	()
 {
 	bWorking=true;	
