@@ -9,6 +9,7 @@
 #include "ActorEffector.h"
 #include "EffectorZoomInertion.h"
 #include "ActorCondition.h"
+#include "CActorAuraPostEffectsBalancer.h"
 #include "UIGameCustom.h"
 #include "clsid_game.h"
 #include "game_cl_base_weapon_usage_statistic.h"
@@ -304,6 +305,7 @@ THudVertexAssignedPatricles* CActor::GetHudVertexAssignedPatriclesComponent()
 void CActor::reinit	()
 {
 	WeaponModifiers = {};
+	LightPerception.Reset();
 	character_physics_support()->movement()->CreateCharacter		();
 	character_physics_support()->movement()->SetPhysicsRefObject	(this);
 	CEntityAlive::reinit						();
@@ -519,6 +521,7 @@ void CActor::Load	(const char* section )
 	CInventoryOwner::Load		(section);
 	m_location_manager->Load	(section);
 	pAutoaim->load				();
+	LightPerception.Load();
 
 	if (IsGameTypeSingle())
 		OnDifficultyChanged		();
@@ -1371,6 +1374,7 @@ void CActor::TryRegisterHelpWounded(CAI_Stalker* targetStalker, const CInventory
 
 void CActor::Die	(CObject* who)
 {
+	ResetCameraFocus();
 	SpatialComponent->type &= ~ESPATIAL_TYPE::ACTOR_ALIVE;
 	SpatialComponent->type |= ESPATIAL_TYPE::ACTOR_DEAD;
 
@@ -2694,6 +2698,8 @@ void CActor::shedule_Update	(u32 DT)
 {
 	PROF_EVENT("CActor shedule_Update");
 	setSVU							(OnServer());
+
+	CActorAuraPostEffectsBalancer::update	();
 
 	if (cam_active == eacFirstEye && !psGameFlags.test(rsActorShadow))
 	{

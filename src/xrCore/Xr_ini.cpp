@@ -3,8 +3,24 @@
 #include <regex>
 
 #include "FS_internal.h"
+#include "IniCache.h"
 
 XRCORE_API xr_hash_map<xr_string, CInifile*>* cached_ini_map = nullptr;
+
+void ClearCachedIniFiles()
+{
+	if (cached_ini_map == nullptr)
+	{
+		return;
+	}
+
+	xr_hash_map<xr_string, CInifile*> CachedIniFiles;
+	CachedIniFiles.swap(*cached_ini_map);
+	for (auto& Entry : CachedIniFiles)
+	{
+		xr_delete(Entry.second);
+	}
+}
 
 static constexpr const char* DLTX_DELETE = "DLTX_DELETE";
 
@@ -1445,16 +1461,6 @@ void CInifile::LTXLoad(IReader* F, const char* path, xr_string_map<xr_string, Se
 							}
 
 							ReadLineLambda();
-							const auto ContentStart = RawLine.find_first_not_of(" \t");
-							if (ContentStart != xr_string::npos &&
-								(RawLine[ContentStart] == '[' || RawLine[ContentStart] == '#' ||
-								 RawLine.compare(ContentStart, 2, "![") == 0 ||
-								 RawLine.compare(ContentStart, 3, "!![") == 0 ||
-								 RawLine.find('=') != xr_string::npos))
-							{
-								FixQuoteLambda();
-								break;
-							}
 
 							value_raw += "\r\n";
 							value_raw += RawLine;
