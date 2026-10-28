@@ -14,6 +14,7 @@
 class CCartridge;
 class CParticlesObject;
 class IRender_Sector;
+struct WeaponsModifiers;
 
 #define WEAPON_MATERIAL_NAME "objects\\bullet"
 
@@ -34,6 +35,9 @@ private:
 // Fire Params
 //////////////////////////////////////////////////////////////////////////
 protected:
+
+	virtual const WeaponsModifiers& GetActorWeaponModifiers() const;
+	float GetModifiedShotInterval(float Interval) const;
 
 	enum
 	{

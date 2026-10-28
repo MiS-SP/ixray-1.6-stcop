@@ -8,6 +8,7 @@
 #ifndef _EDITOR
 #include "imgui.h"
 #include "../../xrEngine/Autotest.h"
+#include "ScreenshotManager.h"
 #endif
 
 dxRenderDeviceRender::dxRenderDeviceRender()
@@ -80,6 +81,7 @@ void dxRenderDeviceRender::updateGamma()
 void dxRenderDeviceRender::OnDeviceDestroy( bool bKeepTextures)
 {
 #ifndef _EDITOR
+	ScreenshotManager::Shutdown();
 #ifdef USE_DX11
 #ifdef DEBUG_DRAW
 	DebugRenderImpl.Shutdown();
@@ -111,6 +113,7 @@ xr_task_group thm_reload_task;
 void  dxRenderDeviceRender::Reset(SDL_Window* window, u32 &dwWidth, u32 &dwHeight)
 {
 #ifndef _EDITOR
+	ScreenshotManager::Flush();
 	Resources->reset_begin	();
 	Memory.mem_compact		();
 
@@ -439,6 +442,8 @@ void dxRenderDeviceRender::End()
 		PROF_EVENT("Async Screenshot");
 		DoAsyncScreenshot();
 	}
+	// Capture the game before ImGui and Present hooks add overlays.
+	ScreenshotManager::CapturePendingScreenshot();
 #if defined(DEBUG_DRAW) && defined(IXR_WINDOWS)
 	{
 		PROF_EVENT("ImGui EndRender");

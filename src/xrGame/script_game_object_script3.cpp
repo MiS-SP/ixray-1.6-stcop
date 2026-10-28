@@ -411,6 +411,11 @@ class_<CScriptGameObject> script_register_game_object2(class_<CScriptGameObject>
 		.def("aim_bone_id",					(const char* (CScriptGameObject::*) () const)&CScriptGameObject::aim_bone_id)
 
 		.def("actor_look_at_point",			&CScriptGameObject::ActorLookAtPoint)
+		.def("actor_focus_point", &CScriptGameObject::ActorFocusPoint)
+		.def("actor_focus_object", &CScriptGameObject::ActorFocusObject)
+		.def("actor_stop_focus", &CScriptGameObject::ActorStopFocus)
+		.def("actor_focus_active", &CScriptGameObject::ActorFocusActive)
+		.def("actor_focus_state", &CScriptGameObject::ActorFocusState)
 		.def("enable_level_changer",		&CScriptGameObject::enable_level_changer)
 		.def("is_level_changer_enabled",	&CScriptGameObject::is_level_changer_enabled)
 
@@ -441,6 +446,7 @@ class_<CScriptGameObject> script_register_game_object2(class_<CScriptGameObject>
 			
 		///////////////////////////////////////////////////////////////////////////////
 		// CoC
+		.def("is_weapon", &CScriptGameObject::IsWeapon)
 		.def("weapon_in_grenade_mode", &CScriptGameObject::WeaponInGrenadeMode)
 		.def("weapon_set_scope", &CScriptGameObject::Weapon_SetCurrentScope)
 		.def("weapon_get_scope", &CScriptGameObject::Weapon_GetCurrentScope)
@@ -496,6 +502,10 @@ class_<CScriptGameObject> script_register_game_object2(class_<CScriptGameObject>
 		.def("item_on_belt",				&CScriptGameObject::ItemOnBelt) 
 		.def("belt_count",					&CScriptGameObject::BeltSize)  													   
 		.def("get_actor_max_weight",		&CScriptGameObject::GetActorMaxWeight)
+		.def("weapons_modifiers", (float (CScriptGameObject::*)(u32) const)(&CScriptGameObject::GetActorWeaponModifier))
+		.def("weapons_modifiers", (float (CScriptGameObject::*)(const char*) const)(&CScriptGameObject::GetActorWeaponModifier))
+		.def("weapons_modifiers", (bool (CScriptGameObject::*)(u32, float))(&CScriptGameObject::SetActorWeaponModifier))
+		.def("weapons_modifiers", (bool (CScriptGameObject::*)(const char*, float))(&CScriptGameObject::SetActorWeaponModifier))
 		.def("set_actor_max_weight",		&CScriptGameObject::SetActorMaxWeight)
 		.def("get_actor_max_walk_weight",	&CScriptGameObject::GetActorMaxWalkWeight)
 		.def("set_actor_max_walk_weight",	&CScriptGameObject::SetActorMaxWalkWeight)

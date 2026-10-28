@@ -343,6 +343,11 @@ public:
 
 
 			void				ActorLookAtPoint	(Fvector point);
+			bool ActorFocusPoint(const Fvector& Point, const CameraFocusParams& Params);
+			bool ActorFocusObject(CScriptGameObject* Target, const Fvector& Offset, const CameraFocusParams& Params);
+			void ActorStopFocus(float Duration);
+			bool ActorFocusActive() const;
+			u32 ActorFocusState() const;
 			void				IterateInventory	(luabind::functor<bool> functor, luabind::object object);
 			void				IterateInventoryBox	(luabind::functor<bool> functor, luabind::object object);
 			void				MarkItemDropped		(CScriptGameObject *item);
@@ -489,6 +494,7 @@ public:
 
 			// FFx0001 ++
 			u32					GetAmmoElapsedWithChamber(); 
+			bool IsWeapon() const;
 			bool				IsWeaponUseChamber();
 			bool				IsWorldObjectBoneVisible(const char* bone_name);
 			bool				SetWorldObjectBoneVisibility(const char* boneName, bool bVisibility);
@@ -1024,6 +1030,10 @@ public:
 			//Phantom
 			void				PhantomSetEnemy(CScriptGameObject*);
 			//Actor
+	float GetActorWeaponModifier(u32 Type) const;
+	float GetActorWeaponModifier(const char* Name) const;
+	bool SetActorWeaponModifier(u32 Type, float Value);
+	bool SetActorWeaponModifier(const char* Name, float Value);
 			float		GetActorMaxWeight() const;
 			void		SetActorMaxWeight(float max_weight);
 			float		GetActorMaxWalkWeight() const;

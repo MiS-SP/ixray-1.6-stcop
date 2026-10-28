@@ -1,6 +1,7 @@
 #include "StdAfx.h"
 #include "pch_script.h"
 #include "Actor.h"
+#include "CActorAuraPostEffectsBalancer.h"
 #include "HUDManager.h"
 #include "Actor_Flags.h"
 #include "Inventory.h"
@@ -475,6 +476,7 @@ void	CActor::net_Import_Physic_proceed	( )
 
 bool CActor::net_Spawn(CSE_Abstract* DC)
 {
+	ResetCameraFocus();
 	m_holder_id				= ALife::_OBJECT_ID(-1);
 	m_snd_noise			= 0.0f;
 
@@ -734,6 +736,10 @@ bool CActor::net_Spawn(CSE_Abstract* DC)
 
 void CActor::net_Destroy	()
 {
+	LightPerception.Reset();
+	ResetCameraFocus();
+	CActorAuraPostEffectsBalancer::clear_all	();
+
 	if (g_pGameLevel)
 	{
 		g_pGameLevel->SoundEvent_OnDestDestroy(this);
@@ -806,6 +812,8 @@ void CActor::net_Destroy	()
 
 void CActor::net_Relcase(CObject* O)
 {
+	LightPerception.Reset();
+	ReleaseCameraFocusTarget(O);
 	VERIFY(O);
 	CGameObject* GO = O->cast_game_object();
 	if(GO&&m_pObjectWeLookingAt==GO){
@@ -1490,6 +1498,7 @@ void CActor::save(NET_Packet &output_packet)
 
 void CActor::load(IReader &input_packet)
 {
+	ResetCameraFocus();
 	inherited::load(input_packet);
 	CInventoryOwner::load(input_packet);
 	m_bOutBorder=!!(input_packet.r_u8());

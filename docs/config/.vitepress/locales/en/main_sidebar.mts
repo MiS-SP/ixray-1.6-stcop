@@ -38,6 +38,7 @@ export const mainSidebar: DefaultTheme.Sidebar = [
           { text: 'Mutants', link: '/en/gameplay/general/mutants' },
           { text: 'Transport', link: '/en/gameplay/general/transport' },
           { text: 'Characters', link: '/en/gameplay/general/characters' },
+          { text: 'PDA statistics', link: '/en/gameplay/general/pda-statistics' },
           { text: 'Third-person view', link: '/en/gameplay/general/3rd-person-view' },
           { text: 'First-person legs', link: '/en/gameplay/general/legs-from-the-first-person' },
           { text: 'Life simulation', link: '/en/gameplay/general/life-simulation' },
@@ -51,6 +52,7 @@ export const mainSidebar: DefaultTheme.Sidebar = [
           { text: 'General information', link: '/en/gameplay/equipment/general-information' },
             { text: 'Visor glass and rain drops', link: '/en/gameplay/equipment/visor-glass' },
           { text: 'Night vision', link: '/en/gameplay/equipment/night-vision' },
+          { text: 'AI reaction to the actor\'s torch', link: '/en/gameplay/equipment/actor-light-perception' },
           { text: 'Item upgrades', link: '/en/gameplay/equipment/item-upgrades' },
         ]
       }
@@ -119,6 +121,7 @@ export const mainSidebar: DefaultTheme.Sidebar = [
       { text: 'Exported enums', link: '/en/scripting/exported-enums' },
       { text: 'Lua: Callbacks', link: '/en/scripting/lua-callbacks' },
       { text: 'New functions', link: '/en/scripting/new-functions' },
+      { text: 'Camera focus', link: '/en/scripting/camera-focus' },
       { text: 'Script callback system', link: '/en/scripting/script-callback-system' },
       { text: 'Saving script data (luamarshal)', link: '/en/scripting/luamarshal' },
       { text: 'Weather manager', link: '/en/scripting/weather-manager' },

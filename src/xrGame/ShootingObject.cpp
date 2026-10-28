@@ -552,17 +552,22 @@ void CShootingObject::FireBullet(const Fvector& pos,
 		is_actor_singleplayer ? g_SingleGameDifficulty : egdMaster;
 	float l_fHitPower = fvHitPower[hit_power_difficulty];
 
+<<<<<<< HEAD
 	if (is_actor_singleplayer && m_actorBaseHitPowerBonus != 0.0f &&
 		m_actorBaseHitPowerBonusInfo.size() && Actor()->HasInfo(m_actorBaseHitPowerBonusInfo))
 	{
 		l_fHitPower += fvBaseHitPower[hit_power_difficulty] * m_actorBaseHitPowerBonus;
 	}
+=======
+	const WeaponsModifiers& Modifiers = GetActorWeaponModifiers();
+	l_fHitPower = Modifiers.ApplyHitPower(l_fHitPower, fire_mode == eSilencerFire);
+>>>>>>> bdb60260c397887bba23f35d95062f30dbe7c7c0
 
 	Level().BulletManager().AddBullet( pos, 
 										dir,
-										m_fStartBulletSpeed * cur_silencer_koef.bullet_speed,
+										Modifiers.ApplyBulletSpeed(m_fStartBulletSpeed * cur_silencer_koef.bullet_speed),
 										l_fHitPower * cur_silencer_koef.hit_power,
-										fHitImpulse * cur_silencer_koef.hit_impulse,
+										Modifiers.ApplyHitImpulse(fHitImpulse * cur_silencer_koef.hit_impulse),
 										parent_id, 
 										weapon_id,
 										ALife::eHitTypeFireWound, 
@@ -572,6 +577,17 @@ void CShootingObject::FireBullet(const Fvector& pos,
 										send_hit, 
 										aim_bullet);
 }
+const WeaponsModifiers& CShootingObject::GetActorWeaponModifiers() const
+{
+	static const WeaponsModifiers DefaultModifiers;
+	return DefaultModifiers;
+}
+
+float CShootingObject::GetModifiedShotInterval(float Interval) const
+{
+	return GetActorWeaponModifiers().ApplyShotInterval(Interval);
+}
+
 void CShootingObject::FireStart	()
 {
 	bWorking=true;	

@@ -27,6 +27,16 @@ void CActor::script_register(lua_State* L)
 {
 	module(L)
 		[
+			class_<CameraFocusParams>("camera_focus_params")
+				.def(constructor<>())
+				.def_readwrite("fov", &CameraFocusParams::Fov)
+				.def_readwrite("blend_in", &CameraFocusParams::BlendIn)
+				.def_readwrite("hold_time", &CameraFocusParams::HoldTime)
+				.def_readwrite("blend_out", &CameraFocusParams::BlendOut)
+				.def_readwrite("tracking_speed", &CameraFocusParams::TrackingSpeed)
+				.def_readwrite("lock_input", &CameraFocusParams::LockInput)
+				.def_readwrite("track", &CameraFocusParams::Track)
+				.def_readwrite("restore_direction", &CameraFocusParams::RestoreDirection),
 			class_<CActor, CGameObject>("CActor")
 				.def(constructor<>())
 			 .def("conditions", &CActor::conditions)
@@ -40,6 +50,7 @@ void CActor::script_register(lua_State* L)
 				def("is_god_mode", isGodMode),
 				def("is_actor_shadow", isActorShadow),
 				def("set_actor_shadow", setActorShadow),
+			class_<enum_exporter<WeaponModifier>>("weaponsModifiers").enum_("type")[value("HIT_POWER_COEFF", (int)WeaponModifier::HitPowerCoeff), value("RPM_COEFF", (int)WeaponModifier::RpmCoeff), value("SILENCER_HIT_POWER_COEFF", (int)WeaponModifier::SilencerHitPowerCoeff), value("UNSILENCED_HIT_POWER_COEFF", (int)WeaponModifier::UnsilencedHitPowerCoeff), value("HIT_IMPULSE_COEFF", (int)WeaponModifier::HitImpulseCoeff), value("FIRE_DISPERSION_BASE_COEFF", (int)WeaponModifier::FireDispersionBaseCoeff), value("CROSSHAIR_INERTION_COEFF", (int)WeaponModifier::CrosshairInertionCoeff), value("BULLET_SPEED_COEFF", (int)WeaponModifier::BulletSpeedCoeff), value("RECOIL_COEFF", (int)WeaponModifier::RecoilCoeff)],
 
 				class_<enum_exporter<EBoostParams>>("EBoostParams").enum_("eboostparams")[
 					value("eBoostHpRestore", eBoostHpRestore),

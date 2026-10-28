@@ -265,26 +265,32 @@ void CGrenade::FastThrow()
 	};
 }
 
-void CGrenade::Destroy() 
+void CGrenade::Destroy()
 {
-	//Generate Expode event
-	Fvector						normal;
+	// Generate Expode event
+	Fvector normal;
 
-	if(m_destroy_callback)
+	if (m_destroy_callback)
 	{
-		m_destroy_callback		(this);
-		m_destroy_callback	=	destroy_callback(nullptr);
+		m_destroy_callback(this);
+		m_destroy_callback = destroy_callback(nullptr);
 	}
 
 	if (H_Parent() == nullptr && CurrentParentID() == u16(-1))
 	{
 		SetInitiator(ID());
 	}
+<<<<<<< HEAD
 	
 	FindNormal					(normal);
 	CExplosive::GenExplodeEvent	(Position(), normal);
 }
+=======
+>>>>>>> bdb60260c397887bba23f35d95062f30dbe7c7c0
 
+	FindNormal(normal);
+	CExplosive::GenExplodeEvent(Position(), normal);
+}
 
 
 bool CGrenade::Useful() const
