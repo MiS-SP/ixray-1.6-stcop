@@ -10,10 +10,36 @@
 #include "../WeaponMagazined.h"
 #include "../PDA.h"
 #include "../Inventory.h"
+#include "../PowerCell.h"
 #include "../../xrEngine/string_table.h"
 #include "../ai_object_location.h"
 #include "../game_sv_single.h"
 #include "../InventoryWeaponSlotLayout.h"
+#include "../IInventoryUseActions.h"
+
+struct ConfigUseAction
+{
+	const char* Key;
+	u32 Action;
+};
+
+struct UsePropertiesContext
+{
+	PIItem Item;
+	CUIPropertiesBox* Box;
+	shared_str SectionName;
+
+	bool Add(const char* Text, void* Data, u32 Action)
+	{
+		if (!Text)
+		{
+			return false;
+		}
+
+		Box->AddItem(Text, Data, Action);
+		return true;
+	}
+};
 
 void move_item_from_to(u16 from_id, u16 to_id, u16 what_id);
 
@@ -95,107 +121,107 @@ void CUIActorMenuBase::ActivatePropertiesBox()
 	}
 }
 
+static bool AddDefaultUseAction(UsePropertiesContext& Context)
+{
+	const char* Text = READ_IF_EXISTS(
+		pSettings,
+		r_string,
+		Context.SectionName,
+		"default_use_text",
+		nullptr
+	);
+
+	if (Text)
+	{
+		return Context.Add(Text, nullptr, INVENTORY_EAT_ACTION);
+	}
+
+	if (smart_cast<CMedkit*>(Context.Item) ||
+		smart_cast<CAntirad*>(Context.Item))
+	{
+		return Context.Add(
+			"st_use",
+			nullptr,
+			INVENTORY_EAT_ACTION
+		);
+	}
+
+	if (smart_cast<CBottleItem*>(Context.Item))
+	{
+		return Context.Add(
+			"st_drink",
+			nullptr,
+			INVENTORY_EAT_ACTION
+		);
+	}
+
+	if (auto* EatableItem = smart_cast<CEatableItem*>(Context.Item))
+	{
+		return Context.Add(
+			*EatableItem->UseText,
+			nullptr,
+			INVENTORY_EAT_ACTION
+		);
+	}
+
+	return false;
+}
+
 void CUIActorMenuBase::PropertiesBoxForUsing(PIItem item, bool& b_show)
 {
-	const char* act_str = nullptr;
-	CGameObject* GO = smart_cast<CGameObject*>(item);
-	shared_str	section_name = GO->cNameSect();
+	UsePropertiesContext Context{
+		item,
+		m_UIPropertiesBox,
+		item->m_section_id
+	};
 
-	//ability to set eat string from settings
-	act_str = READ_IF_EXISTS(pSettings, r_string, section_name, "default_use_text", 0);
-	if (act_str)
+	// Config-defined default action
+	b_show |= AddDefaultUseAction(Context);
+
+	// Item-defined actions
+	if (auto* Provider =
+			smart_cast<IInventoryUseActions*>(item))
 	{
-		m_UIPropertiesBox->AddItem(act_str, nullptr, INVENTORY_EAT_ACTION);
-		b_show = true;
+		UseActionContext ActionContext;
+		ActionContext.Inventory = GetInventory();
+		ActionContext.Owner = GetInventoryOwner();
+		ActionContext.Item = item;
+
+		b_show |= Provider->FillUseActions(
+			m_UIPropertiesBox,
+			ActionContext
+		);
 	}
-	else
-	{
-		CMedkit* pMedkit = smart_cast<CMedkit*>		(item);
-		CAntirad* pAntirad = smart_cast<CAntirad*>		(item);
-		CEatableItem* pEatableItem = smart_cast<CEatableItem*>	(item);
-		CBottleItem* pBottleItem = smart_cast<CBottleItem*>	(item);
 
-		if (pMedkit || pAntirad)
+	// Config-defined additional actions
+	static constexpr ConfigUseAction Actions[] =
 		{
-			act_str = "st_use";
-		}
-		else if (pBottleItem)
+			{"use1_text", INVENTORY_EAT2_ACTION},
+			{"use2_text", INVENTORY_EAT3_ACTION},
+			{"use3_text", INVENTORY_EAT4_ACTION},
+			{"use4_text", INVENTORY_EAT5_ACTION},
+		};
+
+	for (const auto& Action : Actions)
+	{
+		const char* Text = READ_IF_EXISTS(
+			pSettings,
+			r_string,
+			Context.SectionName,
+			Action.Key,
+			nullptr
+		);
+
+		if (Text)
 		{
-			act_str = "st_drink";
-		}
-		else if (pEatableItem)
-		{
-			act_str = *pEatableItem->UseText;
-		}
-		if (act_str)
-		{
-			m_UIPropertiesBox->AddItem(act_str, nullptr, INVENTORY_EAT_ACTION);
+			m_UIPropertiesBox->AddItem(
+				Text,
+				nullptr,
+				Action.Action
+			);
+
 			b_show = true;
 		}
-	}
-
-	if (IAntigas* pAntigas = smart_cast<IAntigas*>(item))
-	{
-		if (pAntigas->OnPropertiesBoxForUsing(m_UIPropertiesBox))
-		{
-			b_show = true;
-		}
-	}
-
-	if (PowerBank* oPowerBank = smart_cast<PowerBank*>(item))
-	{
-		if (oPowerBank->OnPropertiesBoxForUsing(m_UIPropertiesBox))
-		{
-			b_show = true;
-		}
-	}
-
-	if (IPowerManager* oPowerManager = smart_cast<IPowerManager*>(item))
-	{
-		if (oPowerManager->OnPropertiesBoxForUsing(m_UIPropertiesBox))
-		{
-			b_show = true;
-		}
-	}
-
-	if (CNVG* oCNVG = smart_cast<CNVG*>(item))
-	{
-		if (oCNVG->OnVNGPropertiesBoxForUsing(m_UIPropertiesBox))
-		{
-			b_show = true;
-		}
-	}
-
-	//1st Custom Use action
-	act_str = READ_IF_EXISTS(pSettings, r_string, section_name, "use1_text", 0);
-	if (act_str)
-	{
-		m_UIPropertiesBox->AddItem(act_str, nullptr, INVENTORY_EAT2_ACTION);
-		b_show = true;
-	}
-
-	//2nd Custom Use action
-	act_str = READ_IF_EXISTS(pSettings, r_string, section_name, "use2_text", 0);
-	if (act_str)
-	{
-		m_UIPropertiesBox->AddItem(act_str, nullptr, INVENTORY_EAT3_ACTION);
-		b_show = true;
-	}
-
-	//3rd Custom Use action
-	act_str = READ_IF_EXISTS(pSettings, r_string, section_name, "use3_text", 0);
-	if (act_str)
-	{
-		m_UIPropertiesBox->AddItem(act_str, nullptr, INVENTORY_EAT4_ACTION);
-		b_show = true;
-	}
-
-	//4th Custom Use action
-	act_str = READ_IF_EXISTS(pSettings, r_string, section_name, "use4_text", 0);
-	if (act_str)
-	{
-		m_UIPropertiesBox->AddItem(act_str, nullptr, INVENTORY_EAT5_ACTION);
-		b_show = true;
 	}
 }
 
@@ -736,6 +762,37 @@ void CUIActorMenuBase::ProcessPropertiesBoxClicked(CUIWindow* w, void* d)
 
 	switch ( m_UIPropertiesBox->GetClickedItem()->GetTAG() )
 	{
+		case ATTACH_POWER_CELL:
+		{
+			PIItem RelatedItem = static_cast<PIItem>(m_UIPropertiesBox->GetClickedItem()->GetData());
+			PowerCell* PowerCellItem = smart_cast<PowerCell*>(item);
+			IPowerManager* PowerManager = RelatedItem != nullptr ? smart_cast<IPowerManager*>(RelatedItem) : nullptr;
+			PowerBank* PowerBankItem = RelatedItem != nullptr ? smart_cast<PowerBank*>(RelatedItem) : nullptr;
+
+			if (PowerCellItem == nullptr)
+			{
+				PowerCellItem = RelatedItem != nullptr ? smart_cast<PowerCell*>(RelatedItem) : nullptr;
+				PowerManager = smart_cast<IPowerManager*>(item);
+				PowerBankItem = smart_cast<PowerBank*>(item);
+			}
+
+			const bool HasInstalled = PowerCellItem != nullptr &&
+									  ((PowerManager != nullptr && PowerManager->IstallPowerCell(PowerCellItem)) ||
+									   (PowerBankItem != nullptr && PowerBankItem->InsertPowerCell(PowerCellItem)));
+
+			if (HasInstalled)
+			{
+				CUIDragDropListEx* PowerCellList = GetDisplayListForItem(PowerCellItem, PowerCellItem->m_ItemCurrPlace);
+				if (PowerCellList != nullptr)
+				{
+					RemoveItemFromList(PowerCellList, PowerCellItem);
+				}
+
+				SetCurrentItem(nullptr);
+				PlaySnd(eItemUse);
+			}
+			break;
+		}
 	case INVENTORY_TO_SLOT_ACTION:	ToSlot( cell_item, true, (u16)m_UIPropertiesBox->GetClickedItem()->GetData() );		break;
 	case INVENTORY_TO_BELT_ACTION:	
 		ToBelt( cell_item, false );		break;

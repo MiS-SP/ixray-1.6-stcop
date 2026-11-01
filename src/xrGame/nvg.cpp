@@ -158,31 +158,36 @@ void CNVG::OnItemDrop()
     SetNvgEquiped(false);
 }
 
-bool CNVG::OnVNGPropertiesBoxForUsing(CUIPropertiesBox* m_UIPropertiesBox)
+bool CNVG::FillUseActions(CUIPropertiesBox* Box, const UseActionContext& Context)
 {
-    if (IsNvgEquiped())
-    {
-        if (IsNvgEnabled())
-        {
-            m_UIPropertiesBox->AddItem(
-                "nvg_power_off",
-                nullptr,
-                NVG_OFF
-            );
-            return true;
-        }
-        else
-        {
-            m_UIPropertiesBox->AddItem(
-                "nvg_power_on",
-                nullptr,
-                NVG_ON
-            );
-            return true;
-        }
-    }
+	bool HasAddedActions = IPowerManager::FillUseActions(
+		Box,
+		Context
+	);
 
-    return false;
+	if (Box == nullptr || !IsNvgEquiped())
+	{
+		return HasAddedActions;
+	}
+
+	if (IsNvgEnabled())
+	{
+		Box->AddItem(
+			"nvg_power_off",
+			nullptr,
+			NVG_OFF
+		);
+	}
+	else
+	{
+		Box->AddItem(
+			"nvg_power_on",
+			nullptr,
+			NVG_ON
+		);
+	}
+
+	return true;
 }
 
 bool CNVG::OnVNGPropertiesBoxClicked(CUIPropertiesBox* m_UIPropertiesBox)

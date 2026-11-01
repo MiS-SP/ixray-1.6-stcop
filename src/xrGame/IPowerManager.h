@@ -7,9 +7,11 @@
 #include "../xrUI/Widgets/UIListBoxItem.h"
 #include "UICellItem.h"
 #include "PowerBank.h"
+#include "IInventoryUseActions.h"
 
-class IPowerManager: 
-	public pureFrame
+class IPowerManager :
+	public pureFrame,
+	public IInventoryUseActions
 {
 private:
 	bool use_power_cells = false;
@@ -60,6 +62,6 @@ public:
 
 	bool IstallPowerCell(PowerCell* oPowerCell);
 	bool UnistallPowerCell();
-	bool OnPropertiesBoxForUsing(CUIPropertiesBox* m_UIPropertiesBox);
+	bool FillUseActions(CUIPropertiesBox* Box, const UseActionContext& Context) override;
 	bool OnProcessPropertiesBoxClicked(CUIPropertiesBox* m_UIPropertiesBox);
 };

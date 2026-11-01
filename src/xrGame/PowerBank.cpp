@@ -3,9 +3,11 @@
 #include "PowerCell.h"
 #include "Actor.h"
 #include "Inventory.h"
+#include "InventoryOwner.h"
 #include "ai_object_location.h"
 #include "alife_simulator_base.h"
 #include "alife_simulator.h"
+#include "../xrEngine/string_table.h"
 #include "../xrUI/Widgets/UIProgressBar.h"
 #include "UICellItem.h"
 #include "../xrUI/UIXmlInit.h"
@@ -98,13 +100,13 @@ void PowerBank::EjectPowerCells()
 		for (PowerCellData& power_cell : m_power_cells)
 		{
 			if (CSE_Abstract* s_obj = CALifeSimulator__spawn_item2(
-				sim,
-				power_cell.section.c_str(),
-				obj_parent->Position(),
-				obj_parent->cast_game_object()->ai_location().level_vertex_id(),
-				obj_parent->cast_game_object()->ai_location().game_vertex_id(),
-				obj_parent->ID()
-			))
+					sim,
+					power_cell.section.c_str(),
+					obj_parent->Position(),
+					obj_parent->cast_game_object()->ai_location().level_vertex_id(),
+					obj_parent->cast_game_object()->ai_location().game_vertex_id(),
+					obj_parent->ID()
+				))
 			{
 				AwaitAlifeObject& await_object = m_await_objects_apply_params.emplace_back();
 				await_object.id = s_obj->ID;
@@ -126,7 +128,7 @@ void PowerBank::UpdateCL()
 
 void PowerBank::OnFrame()
 {
-	if (!m_await_objects_apply_params.empty()) 
+	if (!m_await_objects_apply_params.empty())
 	{
 		bool all_used = true;
 		for (AwaitAlifeObject& await_object : m_await_objects_apply_params)
@@ -165,7 +167,7 @@ float PowerBank::GetPower()
 	{
 		result += power_cell.current_power;
 	}
-	
+
 	return result;
 }
 
@@ -271,20 +273,78 @@ void PowerBank::load(IReader& input_packet)
 	}
 }
 
-bool PowerBank::OnPropertiesBoxForUsing(CUIPropertiesBox* m_UIPropertiesBox)
+bool PowerBank::FillUseActions(CUIPropertiesBox* Box, const UseActionContext& Context)
 {
-	if (m_power_cells.size() > 0)
+	if (Box == nullptr)
 	{
-		m_UIPropertiesBox->AddItem(
+		return false;
+	}
+
+	bool HasAddedActions = false;
+
+	if (!m_power_cells.empty())
+	{
+		Box->AddItem(
 			"detach_power_cell",
 			nullptr,
 			DETACH_POWER_CELL
 		);
 
-		return true;
+		HasAddedActions = true;
 	}
 
-	return false;
+	const static bool IsPowerCellContextMenuEnabled =
+		EngineExternal()[EEngineExternalGame::EnablePowerCellContextMenu];
+
+	if (!IsPowerCellContextMenuEnabled ||
+		m_power_cells.size() >= m_max_count_power_cells ||
+		Context.Inventory == nullptr ||
+		Context.Owner == nullptr ||
+		Context.Item == nullptr ||
+		Context.Item->parent_id() != Context.Owner->object_id())
+	{
+		return HasAddedActions;
+	}
+
+	for (PIItem Candidate : Context.Inventory->m_ruck)
+	{
+		PowerCell* PowerCellItem = smart_cast<PowerCell*>(Candidate);
+		if (PowerCellItem == nullptr ||
+			PowerCellItem->parent_id() != Context.Owner->object_id() ||
+			!IsPowerCellInWhiteList(PowerCellItem->GetPowerCellData().section))
+		{
+			continue;
+		}
+
+		const PowerCellData CellData = PowerCellItem->GetPowerCellData();
+		const int ChargePercent =
+			CellData.max_power > 0.0f
+				? iFloor(CellData.current_power / CellData.max_power * 100.0f + 0.5f)
+				: 0;
+
+		shared_str Text =
+			g_pStringTable->translate(
+				"st_install_power_cell"
+			);
+
+
+		Text.printf(
+			"%s %s (%d%%)",
+			Text.c_str(),
+			PowerCellItem->NameItem(),
+			ChargePercent
+		);
+
+		Box->AddItem(
+			Text.c_str(),
+			PowerCellItem,
+			ATTACH_POWER_CELL
+		);
+
+		HasAddedActions = true;
+	}
+
+	return HasAddedActions;
 }
 
 bool PowerBank::OnProcessPropertiesBoxClicked(CUIPropertiesBox* m_UIPropertiesBox)
@@ -293,9 +353,9 @@ bool PowerBank::OnProcessPropertiesBoxClicked(CUIPropertiesBox* m_UIPropertiesBo
 	{
 		switch (m_UIPropertiesBox->GetClickedItem()->GetTAG())
 		{
-		case DETACH_POWER_CELL:
-			EjectPowerCells();
-			return true;
+			case DETACH_POWER_CELL:
+				EjectPowerCells();
+				return true;
 		}
 	}
 
@@ -304,12 +364,10 @@ bool PowerBank::OnProcessPropertiesBoxClicked(CUIPropertiesBox* m_UIPropertiesBo
 
 
 using namespace luabind;
-#pragma optimize("s",on)
+#pragma optimize("s", on)
 void PowerBank::script_register(lua_State* L)
 {
 	module(L)
-		[
-			class_<PowerBank, CGameObject>("PowerBank")
-				.def(constructor<>())
-		];
+		[class_<PowerBank, CGameObject>("PowerBank")
+			 .def(constructor<>())];
 }
