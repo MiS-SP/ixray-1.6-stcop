@@ -1,5 +1,7 @@
 #include "StdAfx.h"
 #include "Weapon.h"
+#include "WeaponKnife.h"
+#include "WeaponMagazinedWGrenade.h"
 
 static float normalize(float val, float min, float max)
 {
@@ -15,50 +17,59 @@ float CWeapon::GetRPM() const
 
 float CWeapon::GetDamage() const
 {
-	float hit_power = fvHitPower[g_SingleGameDifficulty];
+	// Fixed UI calibration, shared by every weapon: D50 maps to 50 percent.
+	constexpr double DamageHalfScale = 1.75;
+	constexpr double DamageExponent = 1.25;
 
-	int cnt = 0;
-	int cnt_ap = 0;
-	float k = 0.0f;
-	float ap = 0.0f;
-
-	for (const auto& ammo : m_ammoTypes)
+	double Damage = fvHitPower[g_SingleGameDifficulty];
+	// Knife hits do not use firearm ammunition or the owner's weapon modifiers.
+	if (!smart_cast<const CWeaponKnife*>(this))
 	{
-		if (pSettings->line_exist(ammo, "k_hit"))
+		// Keep the rifle cartridge when the underbarrel launcher swaps magazines.
+		const auto* GrenadeWeapon = IsGrenadeMode() ? smart_cast<const CWeaponMagazinedWGrenade*>(this) : nullptr;
+		const auto& Magazine = GrenadeWeapon ? GrenadeWeapon->m_magazine2 : m_magazine;
+		const CCartridge* Cartridge = nullptr;
+		if (m_bAmmoInChamber && !m_chamber.empty())
 		{
-			cnt++;
-			k += pSettings->r_float(ammo, "k_hit");
+			Cartridge = &m_chamber.back();
+		}
+		else if (!Magazine.empty())
+		{
+			Cartridge = &Magazine.back();
 		}
 
-		if (pSettings->line_exist(ammo, "k_ap"))
+		double CartridgeHitPower = 1.0;
+		int ProjectileCount = 1;
+		if (Cartridge)
 		{
-			cnt_ap++;
-			ap += pSettings->r_float(ammo, "k_ap");
+			CartridgeHitPower = Cartridge->param_s.kHit;
+			ProjectileCount = Cartridge->param_s.buckShot;
 		}
+		else
+		{
+			// Empty weapons use the selected primary ammo type, never an ammo average.
+			const auto& AmmoTypes = getAmmoTypes();
+			if (!AmmoTypes.empty())
+			{
+				const u8 AmmoIndex = GetAmmoType();
+				const shared_str& AmmoSection = AmmoTypes[AmmoIndex < AmmoTypes.size() ? AmmoIndex : 0];
+				CartridgeHitPower = READ_IF_EXISTS(pSettings, r_float, AmmoSection, "k_hit", 1.0f);
+				ProjectileCount = READ_IF_EXISTS(pSettings, r_s32, AmmoSection, "buck_shot", 1);
+			}
+		}
+
+		// Potential damage of one cartridge, before distance, accuracy and target armor.
+		const auto& Modifiers = *OwnerWeaponModifiers;
+		Damage *= static_cast<double>(Modifiers[WeaponModifiers::eHitPowerCoeff]) * Modifiers[IsSilencerAttached() ? WeaponModifiers::eSilencerHitPowerCoeff : WeaponModifiers::eUnsilencedHitPowerCoeff] * cur_silencer_koef.hit_power * CartridgeHitPower * std::max(ProjectileCount, 0);
 	}
 
-	if (cnt > 0)
+	if (!(Damage > 0.0))
 	{
-		k /= cnt;
-	}
-	else
-	{
-		k = 0.0f;
+		return 0.0f;
 	}
 
-	if (cnt_ap > 0)
-	{
-		ap /= cnt;
-		ap = normalize(ap, -0.3f, 0.75f) / 100.0f;
-	}
-	else
-	{
-		ap = 1.0f;
-	}
-
-	hit_power = hit_power * k * ap;
-
-	return normalize(hit_power, 0.1f, 1.5f);
+	// Equivalent to 100 * D^gamma / (D^gamma + D50^gamma), without large powers.
+	return static_cast<float>(100.0 / (1.0 + std::pow(DamageHalfScale / Damage, DamageExponent)));
 }
 
 float CWeapon::GetDamageMP() const
