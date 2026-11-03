@@ -455,7 +455,7 @@ function sim_board:get_spawn_smart(player)
         if is_point_avail(smart, player.player_name) then
         	--printf("    point avail")
         	--printf(" cap %s + %s < %s", tostring(self:get_smart_squad_quantity(smart, player)), tostring(self:get_smart_population(smart)), tostring(smart.squad_capacity))
-            if self:get_smart_squad_quantity(smart, player) + self:get_smart_population(smart) < smart.squad_capacity then
+            if self:get_smart_squad_quantity(smart, player) + self:get_smart_population(smart) + self:get_smart_departed_squad_quantity(smart) < smart.squad_capacity then
             	--printf("    cap allowed")
                 local spawn_player = xr_logic.pick_section_from_condlist(db.actor_proxy, smart, v)
                 --printf("    spawn player %s", tostring(spawn_player))
@@ -522,14 +522,13 @@ function sim_board:remove_squad(squad)
                 sim_combat:unregister_squad(squad)
         end
 
-        if squad.current_action == nil or
-       squad.current_action.dest_smrt == nil
-        then
-                squad.board:exit_smart(squad, self.smarts[squad.smart_id].smrt)
+        -- Атака должна вернуть свой слот в current_attack_quantity, иначе точка остается заблокированной навсегда.
+        if squad.current_action ~= nil then
+                squad.current_action:finalize()
+                squad.current_action = nil
         end
-        if squad.sim_combat_id ~= nil then
-                src_smart.combat_manager:unregister_squad(squad)
-        end
+
+        squad.board:exit_smart(squad, self.smarts[squad.smart_id].smrt)
         squad:hide()
 
         local player = self.players[squad.player_id]
@@ -759,6 +758,20 @@ function sim_board:get_smart_population(smart)
 --                i = i + 1
 --        end
 --        return i
+end
+-- Отряды, которые ушли из смарта, но их НПС еще занимают его работы (до прихода в новую точку).
+function sim_board:get_smart_departed_squad_quantity(smart)
+        local stayed_squads = self.smarts[smart.id].squads
+        local departed = {}
+        local quan = 0
+        for k,v in pairs(smart.npc_info) do
+                local squad_id = v.se_obj.squad_id
+                if squad_id ~= nil and stayed_squads[squad_id] == nil and departed[squad_id] == nil then
+                        departed[squad_id] = true
+                        quan = quan + 1
+                end
+        end
+        return quan
 end
 --' СТатистика отрядов по смарту. Возвращает количество отрядов, которые атакуют точку
 function sim_board:get_smart_squad_quantity(smart, player)
