@@ -984,6 +984,15 @@ public:
 	bool GetScopeBack();
 
 	//UIWpnParams stuff
+	struct UIStats
+	{
+		shared_str AmmoSection;
+		float Damage = 0.0f;
+		float ArmorPiercing = 0.0f;
+	};
+
+	// Empty preview resolves the next primary cartridge; a live cartridge takes precedence over cached parameters.
+	UIStats GetUIStats(const shared_str& PreviewAmmo = shared_str(), const WeaponAmmo::UIParams* PreviewParams = nullptr) const;
 	float GetRPM() const;
 	float GetDamage() const;
 	float GetDamageMP() const;

@@ -11,6 +11,7 @@ CEngineExternal::CEngineExternal() :
 	string_path fname;
 	FS.update_path(fname, _game_config_, "engine_external.ltx");
 	pOptions = new CInifile(fname);
+	IsAmmoAwareWeaponStatsEnabled = READ_IF_EXISTS(pOptions, r_bool, "ui", "EnableAmmoAwareWeaponStats", false);
 
 	if (pOptions->section_exist("shaders_options"))
 	{

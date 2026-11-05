@@ -17,10 +17,54 @@ float CWeapon::GetRPM() const
 
 float CWeapon::GetDamage() const
 {
+	if (EngineExternal().UseAmmoAwareWeaponStats())
+	{
+		return GetUIStats().Damage;
+	}
+
+	float HitPower = fvHitPower[g_SingleGameDifficulty];
+	int HitPowerCount = 0;
+	float HitPowerCoefficient = 0.0f;
+	float ArmorPiercing = 0.0f;
+	bool HasArmorPiercing = false;
+	for (const shared_str& Ammo : m_ammoTypes)
+	{
+		if (pSettings->line_exist(Ammo, "k_hit"))
+		{
+			++HitPowerCount;
+			HitPowerCoefficient += pSettings->r_float(Ammo, "k_hit");
+		}
+		if (pSettings->line_exist(Ammo, "k_ap"))
+		{
+			HasArmorPiercing = true;
+			ArmorPiercing += pSettings->r_float(Ammo, "k_ap");
+		}
+	}
+	if (HitPowerCount > 0)
+	{
+		HitPowerCoefficient /= HitPowerCount;
+	}
+	if (HasArmorPiercing && HitPowerCount > 0)
+	{
+		// Preserve the historical AP normalization and divisor in legacy mode.
+		ArmorPiercing /= HitPowerCount;
+		ArmorPiercing = normalize(ArmorPiercing, -0.3f, 0.75f) / 100.0f;
+	}
+	else
+	{
+		ArmorPiercing = 1.0f;
+	}
+	HitPower = HitPower * HitPowerCoefficient * ArmorPiercing;
+	return normalize(HitPower, 0.1f, 1.5f);
+}
+
+CWeapon::UIStats CWeapon::GetUIStats(const shared_str& PreviewAmmo, const WeaponAmmo::UIParams* PreviewParams) const
+{
 	// Fixed UI calibration, shared by every weapon: D50 maps to 50 percent.
 	constexpr double DamageHalfScale = 1.75;
 	constexpr double DamageExponent = 1.25;
 
+	UIStats Stats;
 	double Damage = fvHitPower[g_SingleGameDifficulty];
 	// Knife hits do not use firearm ammunition or the owner's weapon modifiers.
 	if (!smart_cast<const CWeaponKnife*>(this))
@@ -38,38 +82,59 @@ float CWeapon::GetDamage() const
 			Cartridge = &Magazine.back();
 		}
 
-		double CartridgeHitPower = 1.0;
-		int ProjectileCount = 1;
-		if (Cartridge)
+		const auto& AmmoTypes = getAmmoTypes(false);
+		const bool HasPreview = PreviewAmmo.size() && pSettings->section_exist(PreviewAmmo) && std::find(AmmoTypes.begin(), AmmoTypes.end(), PreviewAmmo) != AmmoTypes.end();
+		if (HasPreview)
 		{
-			CartridgeHitPower = Cartridge->param_s.kHit;
-			ProjectileCount = Cartridge->param_s.buckShot;
+			Stats.AmmoSection = PreviewAmmo;
 		}
-		else
+		else if (Cartridge)
+		{
+			Stats.AmmoSection = Cartridge->m_ammoSect;
+		}
+		else if (!AmmoTypes.empty())
 		{
 			// Empty weapons use the selected primary ammo type, never an ammo average.
-			const auto& AmmoTypes = getAmmoTypes();
-			if (!AmmoTypes.empty())
+			const u8 AmmoIndex = GetAmmoType(false);
+			Stats.AmmoSection = AmmoTypes[AmmoIndex < AmmoTypes.size() ? AmmoIndex : 0];
+			if (!Stats.AmmoSection.size() || !pSettings->section_exist(Stats.AmmoSection))
 			{
-				const u8 AmmoIndex = GetAmmoType();
-				const shared_str& AmmoSection = AmmoTypes[AmmoIndex < AmmoTypes.size() ? AmmoIndex : 0];
-				CartridgeHitPower = READ_IF_EXISTS(pSettings, r_float, AmmoSection, "k_hit", 1.0f);
-				ProjectileCount = READ_IF_EXISTS(pSettings, r_s32, AmmoSection, "buck_shot", 1);
+				Stats.AmmoSection = nullptr;
+				for (const auto& AmmoSection : AmmoTypes)
+				{
+					if (AmmoSection.size() && pSettings->section_exist(AmmoSection))
+					{
+						Stats.AmmoSection = AmmoSection;
+						break;
+					}
+				}
 			}
 		}
 
+		WeaponAmmo::UIParams Params;
+		if (Cartridge && (!HasPreview || Stats.AmmoSection == Cartridge->m_ammoSect))
+		{
+			Params.HitPower = Cartridge->param_s.kHit;
+			Params.ProjectileCount = Cartridge->param_s.buckShot;
+			Params.ArmorPiercing = Cartridge->param_s.kAP;
+		}
+		else if (Stats.AmmoSection.size())
+		{
+			Params = HasPreview && PreviewParams ? *PreviewParams : WeaponAmmo::ReadUIParams(Stats.AmmoSection);
+		}
+
+		Stats.ArmorPiercing = Params.ArmorPiercing;
 		// Potential damage of one cartridge, before distance, accuracy and target armor.
 		const auto& Modifiers = *OwnerWeaponModifiers;
-		Damage *= static_cast<double>(Modifiers[WeaponModifiers::eHitPowerCoeff]) * Modifiers[IsSilencerAttached() ? WeaponModifiers::eSilencerHitPowerCoeff : WeaponModifiers::eUnsilencedHitPowerCoeff] * cur_silencer_koef.hit_power * CartridgeHitPower * std::max(ProjectileCount, 0);
+		Damage *= static_cast<double>(Modifiers[WeaponModifiers::eHitPowerCoeff]) * Modifiers[IsSilencerAttached() ? WeaponModifiers::eSilencerHitPowerCoeff : WeaponModifiers::eUnsilencedHitPowerCoeff] * cur_silencer_koef.hit_power * Params.HitPower * std::max(Params.ProjectileCount, 0);
 	}
 
-	if (!(Damage > 0.0))
+	if (Damage > 0.0)
 	{
-		return 0.0f;
+		// Equivalent to 100 * D^gamma / (D^gamma + D50^gamma), without large powers.
+		Stats.Damage = static_cast<float>(100.0 / (1.0 + std::pow(DamageHalfScale / Damage, DamageExponent)));
 	}
-
-	// Equivalent to 100 * D^gamma / (D^gamma + D50^gamma), without large powers.
-	return static_cast<float>(100.0 / (1.0 + std::pow(DamageHalfScale / Damage, DamageExponent)));
+	return Stats;
 }
 
 float CWeapon::GetDamageMP() const

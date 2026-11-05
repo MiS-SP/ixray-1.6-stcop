@@ -34,6 +34,7 @@
 #include "../../xrUI/UICursor.h"
 #include "UIInvUpgradeInfo.h"
 #include "UIMessageBoxEx.h"
+#include "UIItemInfo.h"
 
 void move_item_from_to (u16 from_id, u16 to_id, u16 what_id)
 {
@@ -760,6 +761,10 @@ void CUIActorMenuBase::InvalidateAllTransientCellRefs()
 	m_lastFocusLostItem_id = u16(-1);
 	CUICellItem::m_mouse_selected_item = nullptr;
 	InvalidateDerivedCellRefsForList(nullptr);
+	if (m_ItemInfo)
+	{
+		m_ItemInfo->InitItem(nullptr);
+	}
 	InfoCurItem(nullptr);
 	UIInventoryInvalidation::EndDragSession();
 }
@@ -781,6 +786,10 @@ void CUIActorMenuBase::InvalidateTransientCellRefsForList(CUIDragDropListEx* lis
 	{
 		m_pCurrentCellItem = nullptr;
 		InfoCurItem(nullptr);
+	}
+	if (m_ItemInfo && m_ItemInfo->CurrentItem() && is_item_in_list(list, m_ItemInfo->CurrentItem()))
+	{
+		m_ItemInfo->InitItem(nullptr);
 	}
 
 	if (belongsToList(m_cell_lastFocusRecivedItem))
@@ -807,6 +816,14 @@ void CUIActorMenuBase::InvalidateTransientCellRefsForCell(CUICellItem* cell)
 	{
 		m_pCurrentCellItem = nullptr;
 		InfoCurItem(nullptr);
+	}
+	if (m_ItemInfo && m_ItemInfo->CurrentItem() == cell->m_pData)
+	{
+		m_ItemInfo->InitItem(nullptr);
+	}
+	for (u32 Index = 0; Index < cell->ChildsCount(); ++Index)
+	{
+		InvalidateTransientCellRefsForCell(cell->Child(Index));
 	}
 
 	if (m_cell_lastFocusRecivedItem == cell)
@@ -1746,16 +1763,62 @@ void CUIActorMenuBase::UpdateGamepadLegend()
 	}
 }
 
-bool CUIActorMenuBase::OnMouseAction( float x, float y, EUIMessages mouse_action )
+bool CUIActorMenuBase::OnMouseAction(float x, float y, EUIMessages mouse_action)
 {
-	inherited::OnMouseAction( x, y, mouse_action );
+	if ((mouse_action == WINDOW_MOUSE_WHEEL_UP || mouse_action == WINDOW_MOUSE_WHEEL_DOWN) && IsWeaponInfoInputActive() && !m_ItemInfo->GetParent() && m_ItemInfo->CanScrollWeaponInfo())
+	{
+		if (mouse_action == WINDOW_MOUSE_WHEEL_UP)
+		{
+			m_ItemInfo->ScrollUp();
+		}
+		else
+		{
+			m_ItemInfo->ScrollDown();
+		}
+	}
+	else
+	{
+		inherited::OnMouseAction(x, y, mouse_action);
+	}
 	CUIDragDropListEx::FlushPendingDragItemDestroy();
 	return true; // no click`s
 }
 
+void CUIActorMenuBase::Show(bool IsVisible)
+{
+	if (!IsVisible && m_ItemInfo)
+	{
+		m_ItemInfo->InitItem(nullptr);
+	}
+	inherited::Show(IsVisible);
+}
+
+bool CUIActorMenuBase::IsWeaponInfoInputActive()
+{
+	return IsShown() && IsEnabled() && GetHolder() && GetHolder()->TopInputReceiver() == this && !CUIDragDropListEx::m_drag_item && (!m_UIPropertiesBox || !m_UIPropertiesBox->IsShown()) && (!m_pItemDropAmountWnd || !m_pItemDropAmountWnd->IsShown()) && m_ItemInfo;
+}
+
+bool CUIActorMenuBase::CanCycleWeaponAmmo()
+{
+	return IsWeaponInfoInputActive() && m_ItemInfo->CanCycleWeaponAmmo();
+}
+
 bool CUIActorMenuBase::OnKeyboardAction(int dik, EUIMessages keyboard_action)
 {
-	InfoCurItem( nullptr );
+	const bool IsAmmoPreviewActive = CanCycleWeaponAmmo();
+	if (dik == SDL_SCANCODE_TAB && IsAmmoPreviewActive)
+	{
+		if (keyboard_action == WINDOW_KEY_PRESSED && m_ItemInfo->CycleWeaponAmmo() && !m_ItemInfo->GetParent())
+		{
+			const float ParentOffset = GetWndRect().left;
+			fit_in_rect(m_ItemInfo, Frect().set(0.0f, 0.0f, UI_BASE_WIDTH - ParentOffset, UI_BASE_HEIGHT), 10.0f, ParentOffset);
+		}
+		return true;
+	}
+	if (!IsAmmoPreviewActive)
+	{
+		InfoCurItem(nullptr);
+	}
 	if ( is_binded(kDROP, dik) )
 	{
 		if ( WINDOW_KEY_PRESSED == keyboard_action && CurrentIItem() && !CurrentIItem()->IsQuestItem()
@@ -1772,6 +1835,7 @@ bool CUIActorMenuBase::OnKeyboardAction(int dik, EUIMessages keyboard_action)
 	{
 		if ( WINDOW_KEY_PRESSED == keyboard_action )
 		{
+			InfoCurItem(nullptr);
 			UnloadAllWeaponsFromRuck();
 		}
 		return true;
@@ -1786,6 +1850,10 @@ bool CUIActorMenuBase::OnKeyboardAction(int dik, EUIMessages keyboard_action)
 	{
 		if ( WINDOW_KEY_PRESSED == keyboard_action )
 		{
+			if (m_currMenuMode != mmInventory && m_currMenuMode != mmUndefined)
+			{
+				InfoCurItem(nullptr);
+			}
 			OnPressUserKey();
 		}
 		return true;
@@ -1866,6 +1934,10 @@ bool CUIActorMenuBase::OnKeyboardAction(int dik, EUIMessages keyboard_action)
 
 bool CUIActorMenuBase::OnKeyboardHold(int dik)
 {
+	if (dik == SDL_SCANCODE_TAB && CanCycleWeaponAmmo())
+	{
+		return true;
+	}
 	if (!GetActiveSortTabControl())
 	{
 		return false;

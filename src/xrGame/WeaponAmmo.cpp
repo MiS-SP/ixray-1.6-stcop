@@ -13,6 +13,36 @@
 
 #define BULLET_MANAGER_SECTION "bullet_manager"
 
+namespace WeaponAmmo
+{
+static float ReadArmorPiercing(const char* Section)
+{
+	if (pSettings->line_exist(Section, "k_ap"))
+	{
+		return pSettings->r_float(Section, "k_ap");
+	}
+	return std::max(pSettings->r_float(Section, "k_pierce") - 1.0f, 0.0f);
+}
+
+UIParams ReadUIParams(const shared_str& AmmoSection)
+{
+	UIParams Params;
+	Params.ArmorPiercing = -1.0f;
+	if (!AmmoSection.size() || !pSettings->section_exist(AmmoSection))
+	{
+		return Params;
+	}
+
+	Params.HitPower = READ_IF_EXISTS(pSettings, r_float, AmmoSection, "k_hit", 1.0f);
+	Params.ProjectileCount = READ_IF_EXISTS(pSettings, r_s32, AmmoSection, "buck_shot", 1);
+	if (pSettings->line_exist(AmmoSection, "k_ap") || pSettings->line_exist(AmmoSection, "k_pierce"))
+	{
+		Params.ArmorPiercing = ReadArmorPiercing(AmmoSection.c_str());
+	}
+	return Params;
+}
+} // namespace WeaponAmmo
+
 CCartridge::CCartridge() 
 {
 	m_flags.assign			(cfTracer | cfRicochet);
@@ -30,18 +60,7 @@ void CCartridge::Load(const char* section, u8 LocalAmmoType)
 	param_s.kHit				= pSettings->r_float(section, "k_hit");
 	param_s.kImpulse			= pSettings->r_float(section, "k_impulse");
 
-	if (pSettings->line_exist(section, "k_ap"))
-	{
-		param_s.kAP = pSettings->r_float(section, "k_ap");
-	}
-	else
-	{
-		param_s.kAP = pSettings->r_float(section, "k_pierce");
-		param_s.kAP -= 1.0f;
-
-		if (param_s.kAP < 0.f)
-			param_s.kAP = 0.f;
-	}
+	param_s.kAP = WeaponAmmo::ReadArmorPiercing(section);
 	param_s.u8ColorID			= READ_IF_EXISTS(pSettings, r_u8, section, "tracer_color_ID", 0);
 	
 	if (pSettings->line_exist(section, "k_air_resistance"))
@@ -105,18 +124,7 @@ void CWeaponAmmo::Load(const char* section)
 	cartridge_param.kHit		= pSettings->r_float(section, "k_hit");
 	cartridge_param.kImpulse	= pSettings->r_float(section, "k_impulse");
 
-	if (pSettings->line_exist(section, "k_ap"))
-	{
-		cartridge_param.kAP = pSettings->r_float(section, "k_ap");
-	}
-	else
-	{
-		cartridge_param.kAP = pSettings->r_float(section, "k_pierce");
-		cartridge_param.kAP -= 1.0f;
-
-		if (cartridge_param.kAP < 0.f)
-			cartridge_param.kAP = 0.f;
-	}
+	cartridge_param.kAP = WeaponAmmo::ReadArmorPiercing(section);
 
 	cartridge_param.u8ColorID	= READ_IF_EXISTS(pSettings, r_u8, section, "tracer_color_ID", 0);
 

@@ -285,6 +285,12 @@
 	<string id="st_ui_health_sensor">
 		<text>Состояние здоровья</text>
 	</string>
+	<string id="ui_inv_armor_piercing">
+		<text>Бронебойность</text>
+	</string>
+	<string id="ui_ammo_preview">
+		<text>Боеприпасы</text>
+	</string>
 	<string id="ui_ammo_types">
 		<text>Боеприпасы</text>
 	</string>

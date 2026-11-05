@@ -24,6 +24,7 @@
 #include "UIOutfitInfo.h"
 #include "UIBoosterInfo.h"
 #include "../Weapon.h"
+#include "../Level.h"
 #include "../CustomOutfit.h"
 #include "../ActorHelmet.h"
 #include "../eatable_item.h"
@@ -244,12 +245,23 @@ void CUIItemInfo::InitItem(CUICellItem* pCellItem, CInventoryItem* pCompareItem,
 	if(!pCellItem)
 	{
 		m_pInvItem			= nullptr;
+		PreviewAmmo = nullptr;
+		ItemId = u16(-1);
+		CompareItemId = u16(-1);
 		Enable				(false);
 		return;
 	}
 
 	PIItem pInvItem			= (PIItem)pCellItem->m_pData;
+	const bool IsSameItem = m_pInvItem == pInvItem && pInvItem && ItemId == pInvItem->object().ID();
+	const int ScrollPosition = IsSameItem && UIDesc ? UIDesc->GetCurrentScrollPos() : 0;
+	if (!IsSameItem)
+	{
+		PreviewAmmo = nullptr;
+	}
 	m_pInvItem				= pInvItem;
+	ItemId = pInvItem ? pInvItem->object().ID() : u16(-1);
+	CompareItemId = pCompareItem ? pCompareItem->object().ID() : u16(-1);
 	Enable					(nullptr != m_pInvItem);
 	if(!m_pInvItem)			return;
 
@@ -404,21 +416,15 @@ void CUIItemInfo::InitItem(CUICellItem* pCellItem, CInventoryItem* pCompareItem,
 		TryAddUpgradeInfo					(*pInvItem);
 		TryAddBoosterInfo					(*pInvItem);
 
-		if(m_b_FitToHeight)
+		UpdateDescriptionLayout();
+		if (IsSameItem)
 		{
-			UIDesc->SetWndSize				(Fvector2().set(UIDesc->GetWndSize().x, UIDesc->GetPadSize().y) );
-			Fvector2 new_size;
-			new_size.x						= GetWndSize().x;
-			new_size.y						= UIDesc->GetWndPos().y+UIDesc->GetWndSize().y+20.0f;
-			new_size.x						= std::max(105.0f, new_size.x);
-			new_size.y						= std::max(105.0f, new_size.y);
-			
-			SetWndSize						(new_size);
-			if(UIBackground)
-				UIBackground->SetWndSize	(new_size);
+			UIDesc->SetScrollPos(ScrollPosition);
 		}
-
-		UIDesc->ScrollToBegin				();
+		else
+		{
+			UIDesc->ScrollToBegin();
+		}
 	}
 	if(UIItemImage)
     {
@@ -478,7 +484,11 @@ void CUIItemInfo::TryAddWpnInfo(CInventoryItem& pInvItem, CInventoryItem* pCompa
 {
 	if (UIWpnParams->Check(pInvItem))
 	{
-		UIWpnParams->SetInfo(pCompareItem, pInvItem);
+		UIWpnParams->SetInfo(pCompareItem, pInvItem, PreviewAmmo);
+		if (PreviewAmmo.size() && !UIWpnParams->IsPreviewAmmoValid(PreviewAmmo))
+		{
+			PreviewAmmo = nullptr;
+		}
 		UIDesc->AddWindow(UIWpnParams, false);
 	}
 }
@@ -566,6 +576,114 @@ void CUIItemInfo::TryAddBoosterInfo(CInventoryItem& pInvItem)
 	}
 }
 
+void CUIItemInfo::UpdateDescriptionLayout()
+{
+	UIDesc->ForceUpdate();
+	if (m_b_FitToHeight)
+	{
+		constexpr float BottomPadding = 20.0f;
+		float MaximumHeight = flt_max;
+		float DescriptionHeight = UIDesc->GetPadSize().y;
+		const bool IsAmmoLayout = EngineExternal().UseAmmoAwareWeaponStats() && UIWpnParams && UIDesc->HasWindow(UIWpnParams);
+		if (IsAmmoLayout)
+		{
+			// Match the 10 UI-unit border used by actor-menu tooltip placement.
+			constexpr float Border = 10.0f;
+			MaximumHeight = UI_BASE_HEIGHT - 2.0f * Border;
+			if (CUIWindow* Parent = GetParent())
+			{
+				Frect ParentRect;
+				Frect TooltipRect;
+				Parent->GetAbsoluteRect(ParentRect);
+				GetAbsoluteRect(TooltipRect);
+				MaximumHeight = std::min(MaximumHeight, std::min(ParentRect.bottom, UI_BASE_HEIGHT - Border) - std::max(Border, TooltipRect.top));
+			}
+			MaximumHeight = std::max(105.0f, MaximumHeight);
+			DescriptionHeight = std::min(DescriptionHeight, std::max(1.0f, MaximumHeight - UIDesc->GetWndPos().y - BottomPadding));
+		}
+		UIDesc->SetHeight(DescriptionHeight);
+		if (IsAmmoLayout)
+		{
+			CUIScrollBar* ScrollBar = UIDesc->ScrollBar();
+			const float ScrollWidth = ScrollBar && UIDesc->NeedShowScrollBar() ? ScrollBar->GetWidth() : 0.0f;
+			const float DescriptionWidth = std::max(BaseDescriptionWidth, UIDesc->GetPadSize().x + UIDesc->GetHorizIndent() + ScrollWidth);
+			const float ExtraWidth = DescriptionWidth - BaseDescriptionWidth;
+			UIDesc->SetWidth(DescriptionWidth);
+			SetWidth(BaseTooltipWidth + ExtraWidth);
+			if (UIName)
+			{
+				UIName->SetWidth(BaseNameWidth + ExtraWidth);
+			}
+			if (UITradeTip)
+			{
+				UITradeTip->SetWidth(BaseTradeTipWidth + ExtraWidth);
+			}
+			if (UICost)
+			{
+				Fvector2 Position = UICost->GetWndPos();
+				Position.x = BaseCostX + ExtraWidth;
+				UICost->SetWndPos(Position);
+			}
+			if (ScrollBar)
+			{
+				Fvector2 Position = ScrollBar->GetWndPos();
+				Position.x = DescriptionWidth - ScrollBar->GetWidth();
+				ScrollBar->SetWndPos(Position);
+				ScrollBar->SetStepSize(std::max(1, iFloor(DescriptionHeight / 10.0f)));
+				ScrollBar->SetPageSize(iFloor(DescriptionHeight));
+			}
+			UIDesc->ForceUpdate();
+		}
+		SetWndSize(Fvector2().set(std::max(105.0f, GetWidth()), std::min(MaximumHeight, std::max(105.0f, UIDesc->GetWndPos().y + UIDesc->GetHeight() + BottomPadding))));
+		if (UIBackground)
+		{
+			UIBackground->SetWndSize(GetWndSize());
+		}
+	}
+}
+
+bool CUIItemInfo::HasValidWeaponInfo()
+{
+	if (!EngineExternal().UseAmmoAwareWeaponStats() || !IsShown() || !IsEnabled() || ShouldHide3DIconItemDescriptions() || !m_pInvItem || !UIDesc || !UIWpnParams)
+	{
+		return false;
+	}
+	CGameObject* ItemObject = smart_cast<CGameObject*>(Level().Objects.net_Find(ItemId));
+	if (!ItemObject || ItemObject->cast_inventory_item() != m_pInvItem)
+	{
+		InitItem(nullptr);
+		return false;
+	}
+	return UIDesc->HasWindow(UIWpnParams);
+}
+
+bool CUIItemInfo::CanCycleWeaponAmmo()
+{
+	return HasValidWeaponInfo() && UIWpnParams->CanCycleAmmo();
+}
+
+bool CUIItemInfo::CanScrollWeaponInfo()
+{
+	return HasValidWeaponInfo() && UIDesc->GetHeight() < UIDesc->GetPadSize().y;
+}
+
+bool CUIItemInfo::CycleWeaponAmmo()
+{
+	if (!CanCycleWeaponAmmo())
+	{
+		return false;
+	}
+
+	PreviewAmmo = UIWpnParams->NextAmmo();
+	CGameObject* CompareObject = CompareItemId != u16(-1) ? smart_cast<CGameObject*>(Level().Objects.net_Find(CompareItemId)) : nullptr;
+	CInventoryItem* CompareItem = CompareObject ? CompareObject->cast_inventory_item() : nullptr;
+	const int ScrollPosition = UIDesc->GetCurrentScrollPos();
+	UIWpnParams->SetInfo(CompareItem, *m_pInvItem, PreviewAmmo);
+	UpdateDescriptionLayout();
+	UIDesc->SetScrollPos(ScrollPosition);
+	return true;
+}
+
 void CUIItemInfo::Draw()
 {
 	if (ShouldHide3DIconItemDescriptions())
@@ -578,7 +696,7 @@ void CUIItemInfo::Draw()
 
 void CUIItemInfo::ScrollDown()
 {
-	if (UIDesc && !m_b_FitToHeight)
+	if (UIDesc && (!m_b_FitToHeight || UIDesc->GetHeight() < UIDesc->GetPadSize().y))
 	{
 		if (CUIScrollBar* s = UIDesc->ScrollBar())
 		{
@@ -589,7 +707,7 @@ void CUIItemInfo::ScrollDown()
 
 void CUIItemInfo::ScrollUp()
 {
-	if (UIDesc && !m_b_FitToHeight)
+	if (UIDesc && (!m_b_FitToHeight || UIDesc->GetHeight() < UIDesc->GetPadSize().y))
 	{
 		if (CUIScrollBar* s = UIDesc->ScrollBar())
 		{

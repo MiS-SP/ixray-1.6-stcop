@@ -3,6 +3,18 @@
 #include "anticheat_dumpable_object.h"
 #include "../xrScripts/script_export_space.h"
 
+namespace WeaponAmmo
+{
+struct UIParams
+{
+	float HitPower = 1.0f;
+	float ArmorPiercing = 0.0f; // Raw kAP; negative values indicate unavailable data.
+	int ProjectileCount = 1;
+};
+
+UIParams ReadUIParams(const shared_str& AmmoSection);
+} // namespace WeaponAmmo
+
 struct SCartridgeParam
 {
     float	kDist, kDisp, kHit, kImpulse, kAP, kAirRes;

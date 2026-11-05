@@ -1,0 +1,6 @@
+<w>
+	<file name="ui\ui_weapon_ammo_hint">
+		<texture id="ui_weapon_ammo_keycap" x="4" y="4" width="240" height="144" />
+		<texture id="ui_weapon_ammo_panel" x="4" y="244" width="8" height="8" />
+	</file>
+</w>

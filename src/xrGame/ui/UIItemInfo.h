@@ -37,6 +37,12 @@ private:
 	float BaseNameWidth = 0.0f;
 	float BaseTradeTipWidth = 0.0f;
 	float BaseCostX = 0.0f;
+	shared_str PreviewAmmo;
+	u16 ItemId = u16(-1);
+	u16 CompareItemId = u16(-1);
+	void UpdateDescriptionLayout();
+	bool HasValidWeaponInfo();
+
 public:
 						CUIItemInfo			();
 	virtual				~CUIItemInfo		();
@@ -44,6 +50,9 @@ public:
 	void				InitItemInfo		(Fvector2 pos, Fvector2 size, const char* xml_name);
 	bool				InitItemInfo		(const char* xml_name);
 	void				InitItem			(CUICellItem* pCellItem, CInventoryItem* pCompareItem = NULL, u32 item_price=u32(-1), const char* trade_tip=NULL, bool overrideCorrectionByWeight = false);
+	bool CanCycleWeaponAmmo();
+	bool CanScrollWeaponInfo();
+	bool CycleWeaponAmmo();
 
 
 	void				TryAddConditionInfo	(CInventoryItem& pInvItem, CInventoryItem* pCompareItem);

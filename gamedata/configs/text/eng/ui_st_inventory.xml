@@ -285,6 +285,12 @@
 	<string id="st_ui_health_sensor">
 		<text>Health</text>
 	</string>
+	<string id="ui_inv_armor_piercing">
+		<text>Armor piercing</text>
+	</string>
+	<string id="ui_ammo_preview">
+		<text>Ammunition</text>
+	</string>
 	<string id="ui_ammo_types">
 		<text>Ammo</text>
 	</string>

@@ -150,6 +150,7 @@ public:
 	const xr_string WallmarkLeft() const;
 	const xr_string WallmarkRight() const;
 	float GetWeaponIconScaling() const;
+	ICF bool UseAmmoAwareWeaponStats() const { return IsAmmoAwareWeaponStatsEnabled; }
 	const char* PlatformMode() const;
 	bool ClearSkyMode() const;
 	bool CallOfPripyatMode() const;
@@ -230,6 +231,7 @@ private:
 private:
 	EEngineExternalPlatform m_platform_type;
 	EEngineExternalBalance BalanceMode = EEngineExternalBalance::Auto;
+	bool IsAmmoAwareWeaponStatsEnabled = false;
 	CInifile* pOptions;
 };
 

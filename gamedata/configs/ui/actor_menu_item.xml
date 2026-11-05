@@ -136,6 +136,122 @@
 	    <static_ammo_type3 x="195" y="117" width="80" height="40" />
 	</wpn_params>
 
+	<wpn_params_advanced x="0" y="0" width="380" height="234">
+		<prop_line x="0" y="0" width="380" height="9" stretch="1">
+			<texture>ui_inGame2_hint_wnd_Properties</texture>
+		</prop_line>
+		<static_accuracy x="0" y="10" width="18" height="18" stretch="1">
+			<texture>ui_wp_prop_tochnost</texture>
+		</static_accuracy>
+		<static_handling x="0" y="28" width="18" height="18" stretch="1">
+			<texture>ui_wp_prop_ergonomics</texture>
+		</static_handling>
+		<static_damage x="0" y="46" width="18" height="18" stretch="1">
+			<texture>ui_wp_prop_damage</texture>
+		</static_damage>
+		<static_rpm x="0" y="64" width="18" height="18" stretch="1">
+			<texture>ui_wp_prop_skorostrelnost</texture>
+		</static_rpm>
+		<static_ammo x="0" y="82" width="18" height="18" stretch="1">
+			<texture>ui_wp_propery_07</texture>
+		</static_ammo>
+
+		<cap_accuracy x="22" y="12" width="100" height="8">
+			<text font="letterica16" r="170" g="170" b="170" align="l">ui_inv_accuracy</text>
+		</cap_accuracy>
+		<cap_handling x="22" y="30" width="100" height="8">
+			<text font="letterica16" r="170" g="170" b="170" align="l">ui_inv_handling</text>
+		</cap_handling>
+		<cap_damage x="22" y="48" width="100" height="8">
+			<text font="letterica16" r="170" g="170" b="170" align="l">ui_inv_damage</text>
+		</cap_damage>
+		<cap_rpm x="22" y="66" width="100" height="8">
+			<text font="letterica16" r="170" g="170" b="170" align="l">ui_inv_rate_of_fire</text>
+		</cap_rpm>
+
+		<progress_accuracy x="130" y="14" width="250" height="9" horz="1">
+			<progress stretch="1">
+				<texture a="150">ui_inGame2_hint_wnd_bar_alfa_line</texture>
+			</progress>
+			<background stretch="1">
+				<texture>ui_inGame2_hint_wnd_bar</texture>
+			</background>
+			<color_less color="pda_red"  />
+			<color_more color="pda_green"/>
+		</progress_accuracy>
+		<progress_handling x="130" y="32" width="250" height="9" horz="1">
+			<progress stretch="1">
+				<texture a="150">ui_inGame2_hint_wnd_bar_alfa_line</texture>
+			</progress>
+			<background stretch="1">
+				<texture>ui_inGame2_hint_wnd_bar</texture>
+			</background>
+			<color_less color="pda_red"  />
+			<color_more color="pda_green"/>
+		</progress_handling>
+		<progress_damage x="130" y="50" width="250" height="9" horz="1">
+			<progress stretch="1">
+				<texture a="150">ui_inGame2_hint_wnd_bar_alfa_line</texture>
+			</progress>
+			<background stretch="1">
+				<texture>ui_inGame2_hint_wnd_bar</texture>
+			</background>
+			<color_less color="pda_red"  />
+			<color_more color="pda_green"/>
+		</progress_damage>
+		<progress_rpm x="130" y="68" width="250" height="9" horz="1">
+			<progress stretch="1">
+				<texture a="150">ui_inGame2_hint_wnd_bar_alfa_line</texture>
+			</progress>
+			<background stretch="1">
+				<texture>ui_inGame2_hint_wnd_bar</texture>
+			</background>
+			<color_less color="pda_red"  />
+			<color_more color="pda_green"/>
+		</progress_rpm>
+
+		<cap_ammo_count x="22" y="84" width="100" height="8">
+			<text font="letterica16" r="170" g="170" b="170" align="l">ui_ammo_count</text>
+		</cap_ammo_count>
+		<cap_ammo_count2 x="130" y="84" width="100" height="8">
+			<text font="letterica16" align="l" r="170" g="170" b="170"/>
+		</cap_ammo_count2>
+
+		<cap_armor_piercing x="22" y="102" width="100" height="16">
+			<text font="letterica16" align="l" r="170" g="170" b="170">ui_inv_armor_piercing</text>
+		</cap_armor_piercing>
+		<progress_armor_piercing x="130" y="104" width="250" height="9" horz="1">
+			<progress stretch="1">
+				<texture a="150">ui_inGame2_hint_wnd_bar_alfa_line</texture>
+			</progress>
+			<background stretch="1">
+				<texture>ui_inGame2_hint_wnd_bar</texture>
+			</background>
+			<color_less color="pda_red"  />
+			<color_more color="pda_green"/>
+		</progress_armor_piercing>
+
+		<ammo_frame x="0" y="120" width="380" height="106" padding_bottom="8" spacing_top="6" icons_gap_x="6" icons_gap_y="6">
+			<texture a="230">ui_inGame2_servers_list_frame</texture>
+			<ammo_background x="2" y="2" width="376" height="102" stretch="1">
+				<texture>ui_weapon_ammo_panel</texture>
+			</ammo_background>
+			<cap_ammo_types x="8" y="6" width="318" height="18">
+				<text font="letterica16" align="l" r="170" g="170" b="170" complex_mode="1">ui_ammo_preview</text>
+			</cap_ammo_types>
+			<ammo_switch_hint x="332" y="6" width="40" height="24" stretch="1">
+				<texture>ui_weapon_ammo_keycap</texture>
+				<text font="letterica16" align="c" vert_align="c" complex_mode="0" r="51" g="48" b="39">TAB</text>
+			</ammo_switch_hint>
+			<cap_ammo_used_type x="8" y="34" width="364" height="18">
+				<text font="letterica16" align="l" r="210" g="210" b="210" complex_mode="1"/>
+			</cap_ammo_used_type>
+			<static_ammo_type1 x="8" y="58" width="80" height="40" />
+		</ammo_frame>
+		<ammo_selected r="255" g="255" b="255" a="255"/>
+		<ammo_unselected r="170" g="170" b="170" a="160"/>
+	</wpn_params_advanced>
+
 	<knife_params x="0" y="0" width="285" height="70">
 		<prop_line x="0" y="0" width="370" height="9" stretch="1">
 			<texture>ui_inGame2_hint_wnd_Properties</texture>

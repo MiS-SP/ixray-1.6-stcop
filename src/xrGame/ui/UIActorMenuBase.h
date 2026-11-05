@@ -249,6 +249,8 @@ protected:
 	void						ApplySortTabCaptions		(CUITabControl* tabControl, EInventorySortSystem system) const;
 	CUITabControl*				GetActiveSortTabControl		() const;
 	bool						ProcessSortTabKeyboardSwitch(int dik, EUIMessages keyboard_action);
+	bool CanCycleWeaponAmmo();
+	bool IsWeaponInfoInputActive();
 	bool						AnyInfoWindowOpen			() const;
 			void				CheckSelectors				();
 
@@ -396,6 +398,7 @@ public:
 
 	void						OnInventoryAction			(PIItem pItem, u16 action_type);
 	virtual void				Update						();
+	virtual void Show(bool IsVisible) override;
 
 	virtual bool				OnMouseAction				(float x, float y, EUIMessages mouse_action);
 	virtual bool				OnKeyboardAction			(int dik, EUIMessages keyboard_action);
