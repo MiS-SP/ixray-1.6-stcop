@@ -353,7 +353,7 @@ bool CTextureAtlas::tryAddRegion(element_lookupid_type& lookup_element_id, const
 	if (m_p_atlas && m_p_texture)
 	{
 		smol_atlas_item_t* p_current_placement = sma_item_add(m_p_atlas, w, h);
-		R_ASSERT(p_current_placement && "failed to create logical placement item");
+		// A full page is an expected probe failure; the storage will try another atlas.
 		result = !!(p_current_placement);
 		if (p_current_placement)
 		{
@@ -1470,52 +1470,37 @@ bool CSVGStorage::add_data(const xr_string& atlasTableKey, const std::string_vie
 
 bool CSVGStorage::try_add_data(const xr_string& atlasTableKey, const std::string_view& filesystemSubpath, float requested_width, float requested_height, const CTextureAtlas::element_lookupid_type atlas_lookup_id, CTextureAtlas& atlas, AtlasConnection& connection, SVGTintRGBA tint)
 {
+	// Connection slots are local to this SVG, not global atlas indices.
+	const auto ConnectionEnd = connection.atlas_ids + _kSVGStorage_MaxAtlasPlacement;
+	auto ConnectionSlot = std::find(connection.atlas_ids, ConnectionEnd, atlas_lookup_id);
+	if (ConnectionSlot == ConnectionEnd)
+	{
+		ConnectionSlot = std::find(connection.atlas_ids, ConnectionEnd, CTextureAtlas::element_lookupid_type(-1));
+	}
+	if (ConnectionSlot == ConnectionEnd)
+	{
+		return false;
+	}
+
+	const auto ConnectionIndex = ConnectionSlot - connection.atlas_ids;
+	const auto ElementBegin = connection.elements_per_atlas + ConnectionIndex * _kSVGStorage_MaxElementsPerAtlas;
+	const auto ElementEnd = ElementBegin + _kSVGStorage_MaxElementsPerAtlas;
+	const auto ElementSlot = std::find(ElementBegin, ElementEnd, CTextureAtlas::element_lookupid_type(-1));
+	if (ElementSlot == ElementEnd)
+	{
+		return false;
+	}
+
 	bool result = false;
 
 	CTextureAtlas::element_lookupid_type lookup_el_id;
 	const xr_string_view atlasKeyView{ atlasTableKey.c_str(), atlasTableKey.size() };
 	result = atlas.tryAddRegion(lookup_el_id, atlasKeyView, requested_width, requested_height);
 
-	if (lookup_el_id != CTextureAtlas::element_lookupid_type(-1))
+	if (result)
 	{
-		R_ASSERT(atlas_lookup_id <= CTextureAtlas::element_lookupid_type(3) && "overflow, same texture can be placed at most in 4 atlases!");
-
-		bool filled_atlas_info = false;
-		for (int i = 0; i < _kSVGStorage_MaxAtlasPlacement; ++i)
-		{
-			if (connection.atlas_ids[i] == CTextureAtlas::element_lookupid_type(-1))
-			{
-				connection.atlas_ids[i] = atlas_lookup_id;
-				filled_atlas_info = true;
-				break;
-			}
-
-			if (connection.atlas_ids[i] == atlas_lookup_id)
-			{
-				filled_atlas_info = true;
-				break;
-			}
-		}
-
-		R_ASSERT(filled_atlas_info && "probably overflow it means we can't insert new information to existed connection");
-
-		if (filled_atlas_info)
-		{
-			bool filled_element_info = false;
-			for (int j = 0; j < _kSVGStorage_MaxElementsPerAtlas; ++j)
-			{
-				const int connection_el_id = j + (atlas_lookup_id * _kSVGStorage_MaxElementsPerAtlas);
-
-				if (connection.elements_per_atlas[connection_el_id] == CTextureAtlas::element_lookupid_type(-1))
-				{
-					connection.elements_per_atlas[connection_el_id] = lookup_el_id;
-					filled_element_info = true;
-					break;
-				}
-			}
-
-			R_ASSERT(filled_element_info && "failed to set data, overflow!");
-		}
+		*ConnectionSlot = atlas_lookup_id;
+		*ElementSlot = lookup_el_id;
 	}
 
 #ifdef DEBUG
