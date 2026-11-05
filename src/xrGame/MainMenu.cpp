@@ -634,7 +634,7 @@ void CMainMenu::DestroyInternal(bool bForce)
 	}
 	if (m_deactivated_frame < Device.dwFrame + 4 || bForce)
 	{
-		CleanInternals();
+		// Activate(false) already detached the menu. A game dialog may now own the cursor.
 		xr_delete(m_startDialog);
 	}
 }
