@@ -135,10 +135,10 @@
 		<static_damage x="0" y="46" width="14" height="18" stretch="1">
 			<texture>ui_wp_prop_damage</texture>
 		</static_damage>
-		<static_rpm x="0" y="64" width="14" height="18" stretch="1">
+		<static_rpm x="0" y="82" width="14" height="18" stretch="1">
 			<texture>ui_wp_prop_skorostrelnost</texture>
 		</static_rpm>
-		<static_ammo x="0" y="82" width="14" height="18" stretch="1">
+		<static_ammo x="0" y="100" width="14" height="18" stretch="1">
 			<texture>ui_wp_propery_07</texture>
 		</static_ammo>
 		<cap_accuracy x="18" y="12" width="80" height="8">
@@ -150,7 +150,7 @@
 		<cap_damage x="18" y="48" width="80" height="8">
 			<text font="letterica16" r="170" g="170" b="170" align="l">ui_inv_damage</text>
 		</cap_damage>
-		<cap_rpm x="18" y="66" width="80" height="8">
+		<cap_rpm x="18" y="84" width="80" height="8">
 			<text font="letterica16" r="170" g="170" b="170" align="l">ui_inv_rate_of_fire</text>
 		</cap_rpm>
 
@@ -184,7 +184,7 @@
 			<color_less color="pda_red"  />
 			<color_more color="pda_green"/>
 		</progress_damage>
-		<progress_rpm x="104" y="68" width="186" height="9" horz="1">
+		<progress_rpm x="104" y="86" width="186" height="9" horz="1">
 			<progress stretch="1">
 				<texture a="150">ui_inGame2_hint_wnd_bar_alfa_line_16</texture>
 			</progress>
@@ -195,17 +195,21 @@
 			<color_more color="pda_green"/>
 		</progress_rpm>
 
-		<cap_ammo_count x="18" y="84" width="80" height="8">
+		<cap_ammo_count x="18" y="102" width="80" height="8">
 			<text font="letterica16" r="170" g="170" b="170" align="l">ui_ammo_count</text>
 		</cap_ammo_count>
-		<cap_ammo_count2 x="104" y="84" width="80" height="8">
+		<cap_ammo_count2 x="104" y="102" width="80" height="8">
 			<text font="letterica16" align="l" r="170" g="170" b="170"/>
 		</cap_ammo_count2>
 
-		<cap_armor_piercing x="18" y="102" width="80" height="16">
+		<cap_armor_piercing x="18" y="66" width="80" height="16">
 			<text font="letterica16" align="l" r="170" g="170" b="170">ui_inv_armor_piercing</text>
+			<auto_static x="-18" y="-2" width="14" height="18" stretch="1">
+				<window_name>armor_piercing_icon</window_name>
+				<texture>ui_wp_prop_armor_piercing</texture>
+			</auto_static>
 		</cap_armor_piercing>
-		<progress_armor_piercing x="104" y="104" width="186" height="9" horz="1">
+		<progress_armor_piercing x="104" y="68" width="186" height="9" horz="1">
 			<progress stretch="1">
 				<texture a="150">ui_inGame2_hint_wnd_bar_alfa_line_16</texture>
 			</progress>
