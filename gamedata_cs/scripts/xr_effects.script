@@ -500,7 +500,7 @@ function kill_npc(actor, npc, p)
 	if p and p[1] then
 				npc = level_object_by_sid(tonumber(p[1]))
 	end
-	if npc ~= nil and npc:alive() then
+	if npc ~= nil and npc:alive() and npc:death_time() == 0 then
 		npc:kill(npc)
 	end
 	--end
@@ -575,8 +575,8 @@ function actor_punch(npc)
 	level.add_cam_effector("camera_effects\\fusker.anm", 999, false, "")
 
 	local active_slot = db.actor:active_slot()
-	if active_slot ~= 1 and
-		 active_slot ~= 2
+	if active_slot ~= CInventory.INV_SLOT_2 and
+		 active_slot ~= CInventory.INV_SLOT_3
 	then
 		return
 	end

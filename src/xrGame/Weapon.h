@@ -872,16 +872,8 @@ public:
 
 	struct AmmoElapsedType
 	{
-		union
-		{
-			u16 data = 0;
-
-			struct
-			{
-				u16 MagazineElapsed : 8;
-				u16 GrenadeElapsed : 8;
-			};
-		};
+		u16 MagazineElapsed = 0;
+		u16 GrenadeElapsed = 0;
 	} AmmoElapsed;
 
 	struct AmmoTypesType

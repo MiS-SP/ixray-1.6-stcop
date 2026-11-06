@@ -32,7 +32,11 @@ int CApplication::Run()
 	}
 
 	// plat
-	std::jthread s(splash::Show);
+	std::jthread SplashThread;
+	if (!Autotest::Active())
+	{
+		SplashThread = std::jthread(splash::Show);
+	}
 
 	SteamWorks.BeginPlay();
 	InitEngine();
@@ -43,7 +47,10 @@ int CApplication::Run()
 
 	EndPlay();
 
-	s.join();
+	if (SplashThread.joinable())
+	{
+		SplashThread.join();
+	}
 
 	return Autotest::Verdict();
 }
@@ -194,7 +201,20 @@ void CApplication::MigrateToGameWindow()
 	SDL_GetWindowPosition(g_AppInfo.Window, &Device.PosX, &Device.PosY);
 
 	if (Autotest::Active())
+	{
 		SDL_HideWindow(g_AppInfo.Window);
+		return;
+	}
+
+	// Keep the window behind the IDE while debugging
+#ifdef IXR_WINDOWS
+	if (!IsDebuggerPresent())
+#endif
+	{
+		SDL_SetHint(SDL_HINT_FORCE_RAISEWINDOW, "1");
+		SDL_RaiseWindow(g_AppInfo.Window);
+		SDL_ResetHint(SDL_HINT_FORCE_RAISEWINDOW);
+	}
 }
 
 void CApplication::LoadCustomSettings()
