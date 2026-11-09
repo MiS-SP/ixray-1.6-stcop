@@ -52,6 +52,33 @@ GameGraph::LEVEL_MAP const& get_levels	( IGameGraph const* graph )
 	return				graph->header().levels();
 }
 
+namespace GameGraphScript
+{
+	static s32 GetVertexLocationType(const IGameGraph::CVertex* Vertex, const luabind::object& Index)
+	{
+		constexpr s32 InvalidLocationType = -1;
+		if (Vertex == nullptr || !Index.is_valid() || Index.type() != LUA_TNUMBER)
+		{
+			return InvalidLocationType;
+		}
+
+		const double Value = luabind::object_cast_nothrow<double>(Index).value_or(InvalidLocationType);
+		// Reject subnormal values before floating-point comparisons can treat them as zero.
+		if (!_valid(Value) || Value < 0 || Value >= (double)GameGraph::LOCATION_TYPE_COUNT)
+		{
+			return InvalidLocationType;
+		}
+
+		const u32 ComponentIndex = (u32)Value;
+		if (Value != ComponentIndex)
+		{
+			return InvalidLocationType;
+		}
+
+		return Vertex->vertex_type()[ComponentIndex];
+	}
+} // namespace GameGraphScript
+
 #pragma optimize("s",on)
 void CGameGraph::script_register		(lua_State *L)
 {
@@ -76,5 +103,7 @@ void CGameGraph::script_register		(lua_State *L)
 			.def("game_point",		&CVertex__game_point)
 			.def("level_id",		&CVertex::level_id)
 			.def("level_vertex_id",	&CVertex::level_vertex_id)
+			.def("LocationType", &GameGraphScript::GetVertexLocationType)
 	];
 }
+
