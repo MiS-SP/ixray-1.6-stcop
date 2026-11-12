@@ -1019,6 +1019,19 @@ void CAI_Stalker::shedule_Update(u32 DT)
 	}
 }
 
+bool CAI_Stalker::is_ai_obstacle() const
+{
+	if (!g_Alive() || !m_movement_manager || animation_movement_controlled())
+	{
+		return false;
+	}
+
+	const auto& Movement = movement();
+	return Movement.movement_type() == eMovementTypeStand &&
+		Movement.target_movement_type() == eMovementTypeStand &&
+		fis_zero(Movement.old_desirable_speed(), EPS_L);
+}
+
 float CAI_Stalker::Radius() const
 { 
 	float R		= inherited::Radius();
@@ -1147,6 +1160,7 @@ void CAI_Stalker::save (NET_Packet &packet)
 	inherited::save			(packet);
 	CInventoryOwner::save	(packet);
 	brain().save			(packet);
+	movement().SaveSmartCover(packet);
 }
 
 void CAI_Stalker::load (IReader &packet)		
@@ -1154,6 +1168,7 @@ void CAI_Stalker::load (IReader &packet)
 	inherited::load			(packet);
 	CInventoryOwner::load	(packet);
 	brain().load			(packet);
+	movement().LoadSmartCover(packet);
 }
 
 void CAI_Stalker::load_critical_wound_bones()

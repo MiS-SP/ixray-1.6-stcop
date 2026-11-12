@@ -214,6 +214,7 @@ public:
 	virtual CScriptEntity*				cast_script_entity			()						{return this;}
 	virtual CPhraseDialogManager*		cast_phrase_dialog_manager	()						{return this;}
 	virtual CAI_PhraseDialogManager*	cast_ai_phrase_dialog_manager()						{return this;}
+	bool is_ai_obstacle() const override;
 
 public:
 			void						init								();
@@ -378,6 +379,7 @@ private:
 
 public:
 			bool						can_kill_member			();
+	bool WouldHitFriendly(const Fvector& Position, const Fvector& Direction, float Dispersion);
 			bool						can_kill_enemy			();
 			float						pick_distance			();
 	IC		float						start_pick_distance		() const;
