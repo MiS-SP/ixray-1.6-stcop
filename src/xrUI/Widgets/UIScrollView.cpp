@@ -297,16 +297,16 @@ void CUIScrollView::_updateVerticalScrollState()
 	}
 
 	const Fvector2 wPos = m_pad->GetWndPos();
+	const bool showScroll = NeedShowScrollBar();
+	m_VScrollBar->Show(showScroll);
+	m_VScrollBar->Enable(showScroll);
+
 	if (!m_VScrollBar->IsFixedLayout())
 	{
 		m_VScrollBar->SetHeight(GetHeight());
 	}
 	m_VScrollBar->SetRange(0, iFloor(m_pad->GetHeight() * Scroll2ViewV()));
 	m_VScrollBar->SetScrollPos(iFloor(-wPos.y));
-
-	const bool showScroll = NeedShowScrollBar();
-	m_VScrollBar->Show(showScroll);
-	m_VScrollBar->Enable(showScroll);
 }
 
 void CUIScrollView::UpdateScroll()
