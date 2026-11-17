@@ -2,6 +2,8 @@
 #include "dxUIRender.h"
 
 #include "dxUIShader.h"
+#include "dxRenderDeviceRender.h"
+#include "SVGStorage.h"
 
 dxUIRender UIRenderImpl;
 
@@ -19,9 +21,18 @@ void dxUIRender::DestroyUIGeom()
 	hGeom_LIT = nullptr;
 }
 
-void dxUIRender::SetShader(IUIShader &shader)
+void dxUIRender::SetShader(IUIShader& shader)
 {
-	dxUIShader *pShader = (dxUIShader*) &shader;
+	if (DEV)
+	{
+		if (CSVGStorage* Storage = DEV->GetSVGStorage())
+		{
+			// SVGs may be rasterized by game updates; upload them on the render thread before drawing.
+			Storage->FlushPendingUploads();
+		}
+	}
+
+	dxUIShader* pShader = (dxUIShader*)&shader;
 	VERIFY(&pShader);
 	VERIFY(pShader->hShader);
 	RCache.set_Shader(pShader->hShader);

@@ -161,7 +161,7 @@ CTextureAtlas::CTextureAtlas(CTextureAtlas&& other) noexcept :
 	shader_was_created{},
 #endif
 	m_is_storage_dirty{},
-	m_id{ other.m_id }, m_p_atlas{ other.m_p_atlas }, m_p_texture{ other.m_p_texture }, m_p_shader{ other.m_p_shader }, sais_wrapper{
+	m_id{ other.m_id }, m_p_atlas{ other.m_p_atlas }, m_p_texture{ other.m_p_texture }, m_p_shader{ other.m_p_shader }, PendingUploads{ std::move(other.PendingUploads) }, sais_wrapper{
 	&static_atlas_items_storage, sizeof(static_atlas_items_storage)
 	}, saissi_wrapper{ &static_atlas_items_storage_spatial_indexing, sizeof(static_atlas_items_storage_spatial_indexing) }, m_atlas_items{
 		storage_allocator{ &sais_wrapper } }, m_atlas_items_spatial_indexing{ spatial_storage_allocator{&saissi_wrapper} }
@@ -208,6 +208,7 @@ CTextureAtlas& CTextureAtlas::operator=(CTextureAtlas&& other) noexcept
 
 		m_p_texture = other.m_p_texture;
 		m_p_shader = other.m_p_shader;
+		PendingUploads = std::move(other.PendingUploads);
 
 		for (auto& element : other.m_atlas_items)
 		{
@@ -260,6 +261,8 @@ void CTextureAtlas::init(int width, int height, const char* pName)
 
 void CTextureAtlas::uninit()
 {
+	PendingUploads.clear();
+
 	if (m_p_texture)
 	{
 		m_p_texture->can_unload = false;
@@ -305,6 +308,14 @@ bool CTextureAtlas::addRegion(element_lookupid_type& lookup_element_id, const xr
 
 	bool result = false;
 	lookup_element_id = element_lookupid_type(-1);
+	if (m_atlas_items.size() >= static_cast<unsigned char>(element_lookupid_type(-1)))
+	{
+		return false;
+	}
+	if (!pData || w == 0 || h == 0 || w > getWidth() || h > getHeight() || (pitch != 0 && pitch < w * 4))
+	{
+		return false;
+	}
 	if (m_p_atlas && m_p_texture)
 	{
 		smol_atlas_item_t* p_current_placement = sma_item_add(m_p_atlas, w, h);
@@ -317,9 +328,6 @@ bool CTextureAtlas::addRegion(element_lookupid_type& lookup_element_id, const xr
 
 			CTextureAtlasElement item;
 			item.p_placement = p_current_placement;
-
-			u32 _w = m_p_texture->get_Width();
-			u32 _h = m_p_texture->get_Height();
 
 			// we don't need to store it but we need to calculate at runtime
 		//	u0 = float(x) / float(_w);
@@ -334,7 +342,7 @@ bool CTextureAtlas::addRegion(element_lookupid_type& lookup_element_id, const xr
 			m_atlas_items_spatial_indexing.back().lookup_id = lookup_element_id;
 
 			if (pitch == 0)
-				pitch = _w * 4;
+				pitch = w * 4;
 
 			addRegion(x, y, w, h, pData, pitch);
 		}
@@ -350,6 +358,10 @@ bool CTextureAtlas::tryAddRegion(element_lookupid_type& lookup_element_id, const
 
 	bool result = false;
 	lookup_element_id = element_lookupid_type(-1);
+	if (m_atlas_items.size() >= static_cast<unsigned char>(element_lookupid_type(-1)))
+	{
+		return false;
+	}
 	if (m_p_atlas && m_p_texture)
 	{
 		smol_atlas_item_t* p_current_placement = sma_item_add(m_p_atlas, w, h);
@@ -373,21 +385,25 @@ bool CTextureAtlas::tryAddRegion(element_lookupid_type& lookup_element_id, const
 
 bool CTextureAtlas::addData(u32 w, u32 h, const void* pData, u32 pitch)
 {
-	bool result = true;
+	if (m_atlas_items.empty() || !pData || w == 0 || h == 0 || (pitch != 0 && pitch < w * 4))
+	{
+		return false;
+	}
 
 	CTextureAtlasElement& element = m_atlas_items.back();
+	if (w != element.w() || h != element.h())
+	{
+		return false;
+	}
 
 	u32 x = static_cast<u32>(sma_item_x(element.p_placement));
 	u32 y = static_cast<u32>(sma_item_y(element.p_placement));
-	u32 _w = m_p_texture->get_Width();
-	u32 _h = m_p_texture->get_Height();
-
 	if (pitch == 0)
-		pitch = _w * 4;
+		pitch = w * 4;
 
 	addRegion(x, y, w, h, pData, pitch);
 
-	return result;
+	return true;
 }
 
 void CTextureAtlas::getRegion(const xr_string_view& icon_subpath_name, u32& w, u32& h)
@@ -396,27 +412,57 @@ void CTextureAtlas::getRegion(const xr_string_view& icon_subpath_name, u32& w, u
 
 void CTextureAtlas::addRegion(u32 x, u32 y, u32 w, u32 h, const void* pData, u32 pitch)
 {
-	if (!m_p_texture || !m_p_texture->pSurface || !pData)
+	if (!m_p_texture || !pData || w == 0 || h == 0 || pitch < w * 4)
+	{
 		return;
+	}
 
-	RHISubResource sub;
-	sub.Data = pData;
-	sub.Width = w;
-	sub.Height = h;
-	sub.Depth = 1;
-	sub.RowPitch = pitch;
-	sub.DepthPitch = 0;
-	sub.TextureFormat = ERHI_FORMAT::R8G8B8A8_UNORM;
+	// Keep the raster alive until the primary render thread can update the GPU texture.
+	PendingUpload Upload;
+	Upload.X = x;
+	Upload.Y = y;
+	Upload.Width = w;
+	Upload.Height = h;
+	const u32 RowPitch = w * 4;
+	Upload.Pixels.resize(static_cast<size_t>(RowPitch) * h);
+	const u8* Source = static_cast<const u8*>(pData);
+	for (u32 Row = 0; Row < h; ++Row)
+	{
+		memcpy(Upload.Pixels.data() + static_cast<size_t>(Row) * RowPitch, Source + static_cast<size_t>(Row) * pitch, RowPitch);
+	}
+	PendingUploads.emplace_back(std::move(Upload));
+}
 
-	RHIBox box;
-	box.left = x;
-	box.top = y;
-	box.front = 0;
-	box.right = x + w;
-	box.bottom = y + h;
-	box.back = 1;
+void CTextureAtlas::FlushPendingUploads()
+{
+	if (!m_p_texture || !m_p_texture->pSurface)
+	{
+		return;
+	}
 
-	m_p_texture->pSurface->UpdateData(0, 0, &sub, box);
+	for (const PendingUpload& Upload : PendingUploads)
+	{
+		RHISubResource Sub = {};
+		Sub.Data = Upload.Pixels.data();
+		Sub.Width = Upload.Width;
+		Sub.Height = Upload.Height;
+		Sub.Depth = 1;
+		Sub.RowPitch = Upload.Width * 4;
+		Sub.TextureFormat = ERHI_FORMAT::R8G8B8A8_UNORM;
+
+		RHIBox Box = {};
+		Box.left = Upload.X;
+		Box.top = Upload.Y;
+		Box.right = Upload.X + Upload.Width;
+		Box.bottom = Upload.Y + Upload.Height;
+		Box.back = 1;
+
+		if (!m_p_texture->pSurface->UpdateData(0, 0, &Sub, Box))
+		{
+			return;
+		}
+	}
+	PendingUploads.clear();
 }
 
 
@@ -708,6 +754,7 @@ CSVGStorage::~CSVGStorage()
 
 void CSVGStorage::init()
 {
+	xrCriticalSectionGuard Guard(StorageGuard);
 	init_default();
 
 #ifdef DEBUG
@@ -717,6 +764,7 @@ void CSVGStorage::init()
 
 void CSVGStorage::uninit()
 {
+	xrCriticalSectionGuard Guard(StorageGuard);
 	m_docLruSlots.clear();
 	m_readBuffer.clear();
 	m_frameShaderUvCache.clear();
@@ -754,11 +802,13 @@ constexpr unsigned char CSVGStorage::get_static_size() const
 // returns current size of storage
 u32 CSVGStorage::get_size() const
 {
+	xrCriticalSectionGuard Guard(StorageGuard);
 	return static_cast<u32>(m_storage_atlases.size());
 }
 
 u32 CSVGStorage::init_atlas(u32 w, u32 h, const char* pTextureName, CTextureAtlas& instance, bool is_generate_id)
 {
+	xrCriticalSectionGuard Guard(StorageGuard);
 	R_ASSERT(pTextureName && pTextureName[0] != '\0' && "you have to pass a valid and not empty string!");
 
 	u32 result = u32(-1);
@@ -772,6 +822,7 @@ u32 CSVGStorage::init_atlas(u32 w, u32 h, const char* pTextureName, CTextureAtla
 
 CTextureAtlas* CSVGStorage::get_atlas(u32 id)
 {
+	xrCriticalSectionGuard Guard(StorageGuard);
 	if (id == _kSVGStorage_DefaultAtlasID)
 		return &m_default_atlas;
 
@@ -784,6 +835,7 @@ CTextureAtlas* CSVGStorage::get_atlas(u32 id)
 
 const CTextureAtlas* CSVGStorage::get_atlas(u32 id) const
 {
+	xrCriticalSectionGuard Guard(StorageGuard);
 	if (id == _kSVGStorage_DefaultAtlasID)
 		return &m_default_atlas;
 
@@ -796,11 +848,13 @@ const CTextureAtlas* CSVGStorage::get_atlas(u32 id) const
 
 const std::pmr::vector<CTextureAtlas>& CSVGStorage::get_atlases(void) const
 {
+	xrCriticalSectionGuard Guard(StorageGuard);
 	return m_storage_atlases;
 }
 
 const FactoryPtr<IUIShader>& CSVGStorage::get_shader(const std::string_view& subpath, float requested_width, float requested_height, SVGTintRGBA tint)
 {
+	xrCriticalSectionGuard Guard(StorageGuard);
 	R_ASSERT(m_p_default_shader && "default shader must be initialized!");
 
 	const FactoryPtr<IUIShader>* pShader = nullptr;
@@ -813,6 +867,7 @@ const FactoryPtr<IUIShader>& CSVGStorage::get_shader(const std::string_view& sub
 
 const FactoryPtr<IUIShader>& CSVGStorage::get_default_shader()
 {
+	xrCriticalSectionGuard Guard(StorageGuard);
 	R_ASSERT(m_p_default_shader && "must be valid and initialized!");
 	if (m_p_default_shader)
 	{
@@ -824,6 +879,7 @@ const FactoryPtr<IUIShader>& CSVGStorage::get_default_shader()
 
 Frect CSVGStorage::get_uv(const std::string_view& subpath, float requested_width, float requested_height, SVGTintRGBA tint)
 {
+	xrCriticalSectionGuard Guard(StorageGuard);
 	const FactoryPtr<IUIShader>* pShader = nullptr;
 	Frect uv{};
 	ResolveSvgRasterDraw(subpath, requested_width, requested_height, tint, &pShader, &uv);
@@ -832,21 +888,35 @@ Frect CSVGStorage::get_uv(const std::string_view& subpath, float requested_width
 
 void CSVGStorage::BeginRasterFrameCache()
 {
+	xrCriticalSectionGuard Guard(StorageGuard);
 	m_frameShaderUvCache.clear();
+}
+
+void CSVGStorage::FlushPendingUploads()
+{
+	xrCriticalSectionGuard Guard(StorageGuard);
+	m_default_atlas.FlushPendingUploads();
+	for (CTextureAtlas& Atlas : m_storage_atlases)
+	{
+		Atlas.FlushPendingUploads();
+	}
 }
 
 void CSVGStorage::SetRasterUserScale(float scale)
 {
+	xrCriticalSectionGuard Guard(StorageGuard);
 	m_rasterUserScale = (scale > 0.f) ? scale : 1.f;
 }
 
 void CSVGStorage::SetMaxRasterPixels(u32 pixels)
 {
+	xrCriticalSectionGuard Guard(StorageGuard);
 	m_maxRasterPixels = (pixels > 0) ? pixels : _kSVGStorage_DefaultMaxRasterPixels;
 }
 
 void CSVGStorage::PrecacheSVG(std::string_view subpath, float width, float height, SVGTintRGBA tint)
 {
+	xrCriticalSectionGuard Guard(StorageGuard);
 	if (subpath.empty())
 		return;
 	const FactoryPtr<IUIShader>* pShader = nullptr;
@@ -856,17 +926,20 @@ void CSVGStorage::PrecacheSVG(std::string_view subpath, float width, float heigh
 
 void CSVGStorage::PrecacheSVGList(const xr_vector<xr_string>& paths, float width, float height, SVGTintRGBA tint)
 {
+	xrCriticalSectionGuard Guard(StorageGuard);
 	for (const xr_string& p : paths)
 		PrecacheSVG(p, width, height, tint);
 }
 
 void CSVGStorage::InvalidateAllSvgDocuments()
 {
+	xrCriticalSectionGuard Guard(StorageGuard);
 	m_docLruSlots.clear();
 }
 
 void CSVGStorage::ReloadSVG(std::string_view subpath)
 {
+	xrCriticalSectionGuard Guard(StorageGuard);
 	EraseDocumentLruByPathKey(MakeSubpathKey(subpath));
 }
 
@@ -1156,6 +1229,7 @@ void CSVGStorage::DebugRecordRenderToBitmapTime(u64 deltaTicks)
 
 void CSVGStorage::DebugCollectSvgCacheRows(xr_vector<SvgDebugCacheTableRow>& out) const
 {
+	xrCriticalSectionGuard Guard(StorageGuard);
 	out.clear();
 	out.reserve(m_storage_textures.size());
 	for (const auto& kv : m_storage_textures)
@@ -1175,6 +1249,7 @@ void CSVGStorage::DebugCollectSvgCacheRows(xr_vector<SvgDebugCacheTableRow>& out
 
 void CSVGStorage::DebugResetSvgMetrics()
 {
+	xrCriticalSectionGuard Guard(StorageGuard);
 	m_debugDocCacheHits = 0;
 	m_debugDocCacheMisses = 0;
 	m_debugNewAtlasAllocCount = 0;
@@ -1223,7 +1298,15 @@ void CSVGStorage::ResolveSvgRasterDraw(const std::string_view& filesystemSubpath
 	if (itEntry == m_storage_textures.end())
 	{
 		AtlasConnection lookup = try_allocate(atlasTableKey, filesystemSubpath, static_cast<float>(useW), static_cast<float>(useH), nullptr, tint);
-		R_ASSERT(lookup.isValid() && "failed to allocate!");
+		if (!lookup.isValid())
+		{
+			if (m_p_default_shader)
+			{
+				*outShader = m_p_default_shader;
+			}
+			FillDefaultAtlasUvForSize(useW, useH, *outUv);
+			return;
+		}
 		m_storage_textures.insert_or_assign(atlasTableKey, lookup);
 		const char idx = lookup.atlas_ids[0];
 		CTextureAtlas& atlas = m_storage_atlases[static_cast<size_t>(static_cast<unsigned char>(idx))];
@@ -1269,7 +1352,15 @@ void CSVGStorage::ResolveSvgRasterDraw(const std::string_view& filesystemSubpath
 		if (!foundExact)
 		{
 			AtlasConnection lookup = try_allocate(atlasTableKey, filesystemSubpath, static_cast<float>(useW), static_cast<float>(useH), &lookupList, tint);
-			R_ASSERT(lookup.isValid() && "failed to allocate!");
+			if (!lookup.isValid())
+			{
+				if (m_p_default_shader)
+				{
+					*outShader = m_p_default_shader;
+				}
+				FillDefaultAtlasUvForSize(useW, useH, *outUv);
+				return;
+			}
 			const char idx = lookup.atlas_ids[0];
 			CTextureAtlas& atlas = m_storage_atlases[static_cast<size_t>(static_cast<unsigned char>(idx))];
 			pFoundShader = atlas.getShader();
@@ -1278,16 +1369,13 @@ void CSVGStorage::ResolveSvgRasterDraw(const std::string_view& filesystemSubpath
 		}
 	}
 
-	if (!pFoundShader)
+	if (!pFoundShader || !hasUv)
 	{
 		if (m_p_default_shader)
 			*outShader = m_p_default_shader;
 		FillDefaultAtlasUvForSize(useW, useH, *outUv);
 		return;
 	}
-
-	if (!hasUv)
-		FillDefaultAtlasUvForSize(useW, useH, uvRect);
 
 	TouchAtlasEntryStats(atlasTableKey);
 	*outShader = pFoundShader;
@@ -1394,6 +1482,10 @@ CSVGStorage::AtlasConnection CSVGStorage::try_allocate(const xr_string& atlasTab
 CSVGStorage::AtlasConnection CSVGStorage::allocate(const xr_string& atlasTableKey, const std::string_view& filesystemSubpath, float RequestedWidth, float requested_height, SVGTintRGBA tint)
 {
 	AtlasConnection result;
+	if (m_storage_atlases.size() >= static_cast<unsigned char>(CTextureAtlas::element_lookupid_type(-1)))
+	{
+		return result;
+	}
 
 	if (RequestedWidth <= SVGStorage_DefaultAtlasSize && requested_height <= SVGStorage_DefaultAtlasSize)
 	{

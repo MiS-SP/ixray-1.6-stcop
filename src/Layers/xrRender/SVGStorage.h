@@ -3,6 +3,7 @@
 #include "../../Include/xrRender/SVGTypes.h"
 #include "../../xrCore/xrstring.h"
 #include "../../xrCore/_stl_extensions.h"
+#include "../../xrCore/xrSyncronize.h"
 #include "TextureAtlas.h"
 
 #include <lunasvg.h>
@@ -77,6 +78,10 @@ public:
 	Frect get_uv(const std::string_view& subpath, float requested_width, float requested_height, SVGTintRGBA tint = {});
 
 	void BeginRasterFrameCache();
+	void FlushPendingUploads();
+
+	// Hold this guard while using atlas pointers or the atlas vector returned by this storage.
+	xrCriticalSection& GetGuard() const { return StorageGuard; }
 
 	void PrecacheSVG(std::string_view subpath, float width, float height, SVGTintRGBA tint = {});
 	void PrecacheSVGList(const xr_vector<xr_string>& paths, float width, float height, SVGTintRGBA tint = {});
@@ -85,17 +90,45 @@ public:
 	void ReloadSVG(std::string_view subpath);
 
 	void SetRasterUserScale(float scale);
-	float GetRasterUserScale() const { return m_rasterUserScale; }
+	float GetRasterUserScale() const
+	{
+		xrCriticalSectionGuard Guard(StorageGuard);
+		return m_rasterUserScale;
+	}
 	void SetMaxRasterPixels(u32 pixels);
-	u32 GetMaxRasterPixels() const { return m_maxRasterPixels; }
+	u32 GetMaxRasterPixels() const
+	{
+		xrCriticalSectionGuard Guard(StorageGuard);
+		return m_maxRasterPixels;
+	}
 
 #ifdef DEBUG
 	void DebugCollectSvgCacheRows(xr_vector<SvgDebugCacheTableRow>& out) const;
-	u64 DebugGetSvgDocCacheHits() const { return m_debugDocCacheHits; }
-	u64 DebugGetSvgDocCacheMisses() const { return m_debugDocCacheMisses; }
-	u64 DebugGetSvgNewAtlasAllocCount() const { return m_debugNewAtlasAllocCount; }
-	u64 DebugGetSvgRenderToBitmapNsAccum() const { return m_debugRenderToBitmapNsAccum; }
-	u32 DebugGetSvgRenderToBitmapSamples() const { return m_debugRenderToBitmapSamples; }
+	u64 DebugGetSvgDocCacheHits() const
+	{
+		xrCriticalSectionGuard Guard(StorageGuard);
+		return m_debugDocCacheHits;
+	}
+	u64 DebugGetSvgDocCacheMisses() const
+	{
+		xrCriticalSectionGuard Guard(StorageGuard);
+		return m_debugDocCacheMisses;
+	}
+	u64 DebugGetSvgNewAtlasAllocCount() const
+	{
+		xrCriticalSectionGuard Guard(StorageGuard);
+		return m_debugNewAtlasAllocCount;
+	}
+	u64 DebugGetSvgRenderToBitmapNsAccum() const
+	{
+		xrCriticalSectionGuard Guard(StorageGuard);
+		return m_debugRenderToBitmapNsAccum;
+	}
+	u32 DebugGetSvgRenderToBitmapSamples() const
+	{
+		xrCriticalSectionGuard Guard(StorageGuard);
+		return m_debugRenderToBitmapSamples;
+	}
 	void DebugResetSvgMetrics();
 #endif
 
@@ -179,7 +212,8 @@ private:
 	std::pmr::monotonic_buffer_resource m_ss_wrapper;
 	std::pmr::vector<CTextureAtlas> m_storage_atlases;
 	xr_hash_map<u32, u32> m_atlasIdToStorageIndex;
-	// single-threaded: all SVG atlas and document caches are used only from the render / resource thread unless guarded externally
+	// Spot initialization can run on the game thread; cache access is serialized with render-thread uploads.
+	mutable xrCriticalSection StorageGuard;
 	xr_hash_map<xr_string, AtlasConnection> m_storage_textures;
 	xr_hash_map<xr_string, SvgAtlasEntryStats> m_atlasEntryStats;
 	xr_vector<SvgDocumentLruEntry> m_docLruSlots;

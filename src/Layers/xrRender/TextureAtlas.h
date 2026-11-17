@@ -93,8 +93,18 @@ public:
 
 	FactoryPtr<IUIShader>* getShader(void) const;
 	void createShader();
+	void FlushPendingUploads();
 
 private:
+	struct PendingUpload
+	{
+		u32 X{};
+		u32 Y{};
+		u32 Width{};
+		u32 Height{};
+		xr_vector<u8> Pixels;
+	};
+
 	element_lookupid_type findNearestSpatialIndex(float w, float h) const;
 	void addRegion(u32 x, u32 y, u32 w, u32 h, const void* pData, u32 pitch);
 private:
@@ -112,6 +122,7 @@ private:
 	CTexture* m_p_texture;
 
 	FactoryPtr<IUIShader>* m_p_shader;
+	xr_vector<PendingUpload> PendingUploads;
 
 	// be very careful, change it only when it is needed by sense 
 	// otherwise we can't provide find as const

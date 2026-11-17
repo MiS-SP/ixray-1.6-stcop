@@ -610,11 +610,15 @@ void R_dsgraph_structure::renderImGuiDebugWindow_SVGStorage()
 
 			if (pStorage)
 			{
+				xrCriticalSectionGuard StorageGuard(pStorage->GetGuard());
+				pStorage->FlushPendingUploads();
+
 				if (ImGui::CollapsingHeader("Runtime"))
 				{
 					CTextureAtlas* pDefault = pStorage->get_atlas(_kSVGStorage_DefaultAtlasID);
 
-					auto p_atlas_draw = [](const CTextureAtlas* pAtlas)->void {
+					auto p_atlas_draw = [](const CTextureAtlas* pAtlas) -> void
+					{
 						ImGui::PushID(static_cast<int>(pAtlas->getID()));
 
 						static bool _ViewerState_EnableDeleting = false;
@@ -849,7 +853,7 @@ void R_dsgraph_structure::renderImGuiDebugWindow_SVGStorage()
 							}
 						}
 						ImGui::PopID();
-						};
+					};
 
 					p_atlas_draw(pDefault);
 					const auto& atlases = pStorage->get_atlases();
