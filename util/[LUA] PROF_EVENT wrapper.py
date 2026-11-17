@@ -261,7 +261,28 @@ def is_body_empty(lines, start, end, end_pos, header_match):
             return False
     return True
 
-def find_functions(lines, skip_wrapped=True):
+def find_functions(lines, skip_wrapped=True, filepath=None):
+    try:
+        return _find_functions(lines, skip_wrapped)
+    except ValueError as error:
+        if filepath is None:
+            raise
+        raise ValueError(f"{filepath}: {error}") from error
+
+
+def format_script_error(filepath, error):
+    message = str(error)
+    prefix = f"{filepath}: "
+    return message if message.startswith(prefix) else prefix + message
+
+
+def _find_functions(lines, skip_wrapped):
+    # Only actual Lua keywords can start a function. Documentation inside a
+    # long comment or string may contain incomplete function declarations.
+    function_positions = {
+        (token.line, token.col) for token in tokenize_lines(lines)
+        if token.kind == 'keyword' and token.value == 'function'
+    }
     funcs = []
     i = 0
     while i < len(lines):
@@ -285,6 +306,11 @@ def find_functions(lines, skip_wrapped=True):
 
             first_line_match = re.match(r'^(\s*)(local\s+)?function\s+([\w:.]+)\s*\(([^)]*)\)', lines[i])
             if not first_line_match:
+                i += 1
+                continue
+
+            function_col = len(first_line_match.group(1)) + len(first_line_match.group(2) or '')
+            if (i, function_col) not in function_positions:
                 i += 1
                 continue
 
@@ -552,7 +578,7 @@ def atomic_write(filepath, lines, encoding):
 def transform_file(input_path, output_path=None, overwrite_backup=False):
     lines, source_enc = read_file_with_encoding(input_path)
     indent_unit = detect_indent_unit(lines)
-    funcs = find_functions(lines, skip_wrapped=True)
+    funcs = find_functions(lines, skip_wrapped=True, filepath=input_path)
     if not funcs:
         return 0
     funcs.sort(key=lambda f: f.start_line, reverse=True)
@@ -581,11 +607,8 @@ def transform_file(input_path, output_path=None, overwrite_backup=False):
     return len(funcs)
 
 def analyze_file(filepath):
-    try:
-        lines, _ = read_file_with_encoding(filepath)
-    except Exception:
-        return 0, 0
-    all_funcs = find_functions(lines, skip_wrapped=False)
+    lines, _ = read_file_with_encoding(filepath)
+    all_funcs = find_functions(lines, skip_wrapped=False, filepath=filepath)
     total = len(all_funcs)
     wrapped = sum(1 for f in all_funcs if is_already_wrapped(lines, f.start_line, f.end_line))
     return total, wrapped
@@ -769,7 +792,7 @@ class FunctionEditorDialog(tk.Toplevel):
 
     def _refresh_list(self):
         self.list.delete(*self.list.get_children())
-        self.funcs = find_functions(self.lines, skip_wrapped=False)
+        self.funcs = find_functions(self.lines, skip_wrapped=False, filepath=self.filepath)
         for func in self.funcs:
             wrapped = is_already_wrapped(self.lines, func.start_line, func.end_line)
             status = "✅ Обёрнута" if wrapped else "❌ Нет"
@@ -812,7 +835,7 @@ class FunctionEditorDialog(tk.Toplevel):
         if wrapped:
             try:
                 preview_lines = smart_unwrap_function(self.lines.copy(), func, self.indent_unit)
-                new_funcs = find_functions(preview_lines, skip_wrapped=False)
+                new_funcs = find_functions(preview_lines, skip_wrapped=False, filepath=self.filepath)
                 new_func = next((f for f in new_funcs if f.start_line == func.start_line), None)
                 if new_func:
                     preview_text = ''.join(preview_lines[new_func.start_line : new_func.end_line + 1])
@@ -848,7 +871,7 @@ class FunctionEditorDialog(tk.Toplevel):
                 self._clear_preview()
             self.status.config(text=f"{func_name} обёрнута успешно.", foreground='green')
         except Exception as e:
-            messagebox.showerror("Ошибка", str(e), parent=self)
+            messagebox.showerror("Ошибка", format_script_error(self.filepath, e), parent=self)
             self.status.config(text=f"Ошибка: {e}", foreground='red')
 
     def _unwrap_current(self):
@@ -864,7 +887,7 @@ class FunctionEditorDialog(tk.Toplevel):
                 self._clear_preview()
             self.status.config(text=f"{func_name} развёрнута успешно.", foreground='green')
         except Exception as e:
-            messagebox.showerror("Ошибка", str(e), parent=self)
+            messagebox.showerror("Ошибка", format_script_error(self.filepath, e), parent=self)
             self.status.config(text=f"Ошибка: {e}", foreground='red')
 
     def _on_close(self):
@@ -1187,6 +1210,7 @@ class TracyManagerApp:
             self.queue.put(("scan_done", []))
             return
         files_data = []
+        errors = []
         try:
             for dirpath, dirnames, filenames in os.walk(root_dir, topdown=True):
                 dirnames[:] = [d for d in dirnames if not self.bl_mgr.is_blacklisted(os.path.join(dirpath, d))]
@@ -1196,7 +1220,11 @@ class TracyManagerApp:
                         if self.bl_mgr.is_blacklisted(full):
                             continue
                         rel = os.path.relpath(full, root_dir)
-                        total, wrapped = analyze_file(full)
+                        try:
+                            total, wrapped = analyze_file(full)
+                        except Exception as error:
+                            errors.append(format_script_error(full, error))
+                            continue
                         ftype = 'script' if fname.endswith('.script') else 'lua'
                         files_data.append({
                             'name': rel,
@@ -1212,6 +1240,8 @@ class TracyManagerApp:
             return
         files_data.sort(key=lambda x: x['name'].lower())
         self.queue.put(("scan_done", files_data))
+        if errors and show_messages:
+            self.queue.put(("error", "Ошибки сканирования:\n" + "\n".join(errors)))
 
     def _build_tree(self, files):
         tree = {}
@@ -1543,12 +1573,12 @@ class TracyManagerApp:
                 else:
                     lines, enc = read_file_with_encoding(path)
                     indent = detect_indent_unit(lines)
-                    funcs = find_functions(lines, skip_wrapped=False)
+                    funcs = find_functions(lines, skip_wrapped=False, filepath=path)
                     wrapped_funcs = [f for f in funcs if is_already_wrapped(lines, f.start_line, f.end_line)]
                     if not wrapped_funcs:
                         continue
                     while True:
-                        funcs = find_functions(lines, skip_wrapped=False)
+                        funcs = find_functions(lines, skip_wrapped=False, filepath=path)
                         wrapped_funcs = [f for f in funcs if is_already_wrapped(lines, f.start_line, f.end_line)]
                         if not wrapped_funcs:
                             break
