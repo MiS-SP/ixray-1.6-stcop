@@ -1,0 +1,18 @@
+if(NOT EXISTS "${TRACY_ETW_SOURCE}")
+    message(FATAL_ERROR "Tracy ETW source is missing: ${TRACY_ETW_SOURCE}")
+endif()
+
+file(READ "${TRACY_ETW_SOURCE}" TracyETWContent)
+set(TracyETWOriginal "static constexpr tracy::SourceLocationData srcLocHere{ nullptr, __FUNCTION__")
+set(TracyETWFixed "static const tracy::SourceLocationData srcLocHere{ nullptr, __FUNCTION__")
+
+string(FIND "${TracyETWContent}" "${TracyETWOriginal}" TracyETWPosition)
+if(NOT TracyETWPosition EQUAL -1)
+    string(REPLACE "${TracyETWOriginal}" "${TracyETWFixed}" TracyETWContent "${TracyETWContent}")
+    file(WRITE "${TRACY_ETW_SOURCE}" "${TracyETWContent}")
+else()
+    string(FIND "${TracyETWContent}" "${TracyETWFixed}" TracyETWPosition)
+    if(TracyETWPosition EQUAL -1)
+        message(FATAL_ERROR "Tracy ETW source has changed; review the MSVC patch")
+    endif()
+endif()
