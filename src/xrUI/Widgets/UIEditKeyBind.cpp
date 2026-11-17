@@ -256,8 +256,11 @@ void CUIEditKeyBind::OnMessage(const char* message)
 		return;// fuck
 
 	_action* other_action	= action_name_to_ptr(command);
-	if( is_group_not_conflicted(m_action->key_group,other_action->key_group) )	
+	if (is_group_not_conflicted(m_action->key_group, other_action->key_group) ||
+		!is_action_group_matching(m_action->action_group, other_action->action_group))
+	{
 		return;
+	}
 
 	SetText				("---");
 	m_keyboard			= nullptr;
