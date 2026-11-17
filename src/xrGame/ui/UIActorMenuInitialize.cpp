@@ -12,6 +12,7 @@
 #include "../../xrUI/Widgets/UIPropertiesBox.h"
 #include "../../xrUI/Widgets/UI3tButton.h"
 #include "../../xrEngine/xr_input.h"
+#include "../../xrEngine/xr_level_controller.h"
 #include "UIInventoryUpgradeWnd.h"
 #include "UIInvUpgradeInfo.h"
 #include "InventorySorter.h"
@@ -27,6 +28,7 @@
 #include "../../xrEngine/string_table.h"
 #include "ui_drop_amount.h"
 #include "../xrUI/Widgets/UIProgressBar.h"
+#include "../Level.h"
 
 CUIActorMenu::CUIActorMenu()
 {
@@ -266,6 +268,11 @@ void CUIActorMenu::Construct()
 	}
 	
 	m_exit_button		= UIHelper::Create3tButton(uiXml, "exit_button", this);
+	if (uiXml.NavigateToNode("unload_ruck_button", 0))
+	{
+		UnloadRuckButton = UIHelper::Create3tButton(uiXml, "unload_ruck_button", this);
+		UnloadRuckButton->Show(false);
+	}
 
 	if (uiXml.NavigateToNode("clock_value", 0))
 	m_clock_value						= UIHelper::CreateStatic(uiXml, "clock_value", this);
@@ -498,6 +505,8 @@ void CUIActorMenu::Construct()
 	ReadWndSelectorsInfo(uiXml, "ui_c_navi_deadbody",	m_ui_navigation_lists[mmDeadBodySearch], wndPointers);
 	ReadWndSelectorsInfo(uiXml, "ui_c_navi_trade",		m_ui_navigation_lists[mmTrade], wndPointers);
 	ReadWndSelectorsInfo(uiXml, "ui_c_navi_upgrade",	m_ui_navigation_lists[mmUpgrade], wndPointers);
+
+	ReloadKeyHints();
 }
 
 void CUIActorMenu::InitCallbacks()
@@ -513,6 +522,12 @@ void CUIActorMenu::InitCallbacks()
 	if (m_putall_button != nullptr)
 	{
 		Register(m_putall_button);
+	}
+
+	if (UnloadRuckButton)
+	{
+		Register(UnloadRuckButton);
+		AddCallback(UnloadRuckButton, BUTTON_CLICKED, CUIWndCallback::void_function(this, &CUIActorMenu::OnUnloadRuckClicked));
 	}
 
 	Register						(m_exit_button);
@@ -550,8 +565,55 @@ void CUIActorMenu::InitCallbacks()
 	}
 }
 
+void CUIActorMenu::OnUnloadRuckClicked(CUIWindow*, void*)
+{
+	InfoCurItem(nullptr);
+	UnloadAllWeaponsFromRuck();
+}
+
+void CUIActorMenu::ReloadKeyHints()
+{
+	ReloadGamepadLegend();
+	if (!UnloadRuckButton)
+	{
+		return;
+	}
+
+	UnloadRuckButton->ReloadText();
+	CUIWindow* KeyWindow = UnloadRuckButton->FindChild("binding_keycap");
+	CUIStatic* Keycap = KeyWindow ? KeyWindow->ui_cast_static() : nullptr;
+	if (!Keycap)
+	{
+		return;
+	}
+
+	const int Key = pInput->GetControllerMode() ? 0 : get_action_dik(kINV_UNLOAD_RUCK);
+	const char* KeyName = Key ? dik_to_keyname(Key) : nullptr;
+	const bool HasKey = KeyName && *KeyName;
+	Keycap->SetVisible(HasKey);
+	Keycap->Enable(false);
+
+	float CaptionOffset = 0.0f;
+	if (HasKey)
+	{
+		const float SquareWidth = Keycap->GetHeight() * UI().get_current_kx();
+		Keycap->SetText(KeyName);
+		Keycap->AdjustWidthToText();
+		Keycap->SetWidth(std::max(SquareWidth, Keycap->GetWidth() + SquareWidth * 0.28f));
+		CaptionOffset = Keycap->GetWidth() + SquareWidth * 0.5f;
+	}
+	UnloadRuckButton->SetTextX(CaptionOffset);
+	UnloadRuckButton->AdjustWidthToText();
+	UnloadRuckButton->SetWidth(CaptionOffset + UnloadRuckButton->GetWidth());
+}
+
 void CUIActorMenu::UpdateButtonsLayout()
 {
+	if (UnloadRuckButton)
+	{
+		UnloadRuckButton->Show(m_currMenuMode == mmInventory && IsGameTypeSingleCompatible());
+	}
+
 	if (m_trade_button)
 	{
 		Fvector2 btn_exit_pos;

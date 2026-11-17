@@ -636,7 +636,7 @@ void CUIGameCustom::ReloadGamepadLegends()
 	// Inventory
 	if (m_ActorMenu)
 	{
-		m_ActorMenu->ReloadGamepadLegend();
+		m_ActorMenu->ReloadKeyHints();
 	}
 	if (m_CarBodyMenu)
 	{

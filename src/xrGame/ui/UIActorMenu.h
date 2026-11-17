@@ -114,6 +114,7 @@ protected:
 	CUI3tButton*				m_takeall_button = nullptr;
 	CUI3tButton*				m_putall_button = nullptr;
 	CUI3tButton*				m_exit_button = nullptr;
+	CUI3tButton*				UnloadRuckButton = nullptr;
 	CUIStatic*					m_clock_value = nullptr;
 
 	u32							m_last_time;
@@ -130,6 +131,7 @@ private:
 public:
 	void						SetMenuMode							(EMenuMode mode);
 	void						SetActor							(CInventoryOwner* io);
+	void						ReloadKeyHints();
 	void						ReloadActorInfo						();
 	void						SetPartner							(CInventoryOwner* io);
 	void						SetInvBox							(CInventoryBox* box);
@@ -178,6 +180,7 @@ protected:
 	
 	void						CheckDistance						();
 
+	void						OnUnloadRuckClicked(CUIWindow*, void*);
 	void						UpdateButtonsLayout					();
 
 	// inventory
