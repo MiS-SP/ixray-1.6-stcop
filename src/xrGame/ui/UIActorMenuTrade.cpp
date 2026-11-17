@@ -154,6 +154,30 @@ void CUIActorMenu::UpdateActor()
 	}
 
 	InventoryUtilities::UpdateWeightStr(m_ActorWeight, *m_ActorWeightMax, m_pActorInvOwner);
+	if (m_ActorWeight != nullptr)
+	{
+		if (!IsActorWeightDefaultColorInitialized)
+		{
+			ActorWeightDefaultColor = m_ActorWeight->GetTextColor();
+			IsActorWeightDefaultColorInitialized = true;
+		}
+
+		u32 WeightColor = ActorWeightDefaultColor;
+		if (CActor* Actor = m_pActorInvOwner->cast_actor())
+		{
+			const float TotalWeight = Actor->inventory().CalcTotalWeight();
+			const u32 DefaultAlpha = color_get_A(ActorWeightDefaultColor);
+			if (TotalWeight > Actor->MaxWalkWeight())
+			{
+				WeightColor = color_rgba(255, 0, 0, DefaultAlpha);
+			}
+			else if (TotalWeight > Actor->MaxCarryWeight())
+			{
+				WeightColor = color_rgba(255, 255, 0, DefaultAlpha);
+			}
+		}
+		m_ActorWeight->SetTextColor(WeightColor);
+	}
 
 	if (m_ActorWeightBar != nullptr)
 	{

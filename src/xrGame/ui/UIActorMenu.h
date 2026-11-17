@@ -73,6 +73,8 @@ protected:
 	CUIStatic*					m_ActorBottomInfo = nullptr;
 	CUIStatic*					m_ActorWeight = nullptr;
 	CUIStatic*					m_ActorWeightMax = nullptr;
+	u32							ActorWeightDefaultColor = 0xffffffff;
+	bool						IsActorWeightDefaultColorInitialized = false;
 	CUIWindow*					m_ActorWeightRow = nullptr;
 	CUIProgressBar*				m_ActorWeightBar = nullptr;
 	CUIProgressBar*				m_ActorVolumeBar = nullptr;
