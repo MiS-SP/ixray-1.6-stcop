@@ -24,16 +24,18 @@ R1/R2 are controlled by `IXRAY_USE_R1` / `IXRAY_USE_R2`. R4, `xrGame`, and `xrPl
 
 ## Options
 
+Full reference with release recommendations: [CMake flags and release settings (Russian)](cmake-flags.md).
+
 Root `CMakeLists.txt`.
 
 | Option | Default | Effect |
 | --- | --- | --- |
 | `IXRAY_USE_R1` | ON | D3D9 static renderer |
 | `IXRAY_USE_R2` | ON | D3D9 dynamic renderer |
-| `IXRAY_UTILS` | OFF | `xrAI`, `xrLC`, `xrCompress`, other tools |
+| `IXRAY_UTILS` | OFF | `xrLevelBuilder` (combined xrAI/xrLC), `xrCompress`, other tools |
 | `IXRAY_UTILS_OPTIX` | OFF | Require CUDA/OptiX lighting in Windows x64 MSVC `xrLevelBuilder` |
 | `IXRAY_EDITORS` | OFF | `src/Editors` |
-| `IXRAY_PLUGINS` | OFF | Max / Maya |
+| `IXRAY_PLUGINS` | OFF | Maya 2024–2027 plugins on x64; Max is commented out |
 | `IXRAY_TESTS` | OFF | `src/test` |
 | `IXRAY_MP` | OFF | `xrRender_DS0`; `xrServer`, `xrServerCLI`, `xrGameSpy` also require `IXR_TEST_CI` |
 | `IXRAY_MP_SQL` | OFF | FreeMP SQL |

@@ -14,6 +14,7 @@ Current branch uses separate `xrRender_R1`, `xrRender_R2`, and `xrRender_R4` cli
 | [camera-focus.md](camera-focus.md) | Actor camera focus, Lua API, input ownership, transitions |
 | [item-parameters.md](item-parameters.md) | Inventory parameter rows, signs, icon colors |
 | [build.md](build.md) | Targets and CMake options |
+| [cmake-flags.md](cmake-flags.md) | Full CMake flag reference and release settings (Russian) |
 | [style.md](style.md) | RAII, types, platform split |
 
 Agent entry: [AGENTS.md](../../AGENTS.md).
