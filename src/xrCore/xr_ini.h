@@ -37,6 +37,9 @@ public:
 
 	static CInifile*	Create		( const char* szFileName, bool ReadOnly=true);
 	static void			Destroy		( CInifile*);
+
+	static void			Retire		( CInifile* Ini );
+	static void			DestroyRetired	( );
     static IC bool		IsBOOL		( const char* B)	{ return (xr_strcmp(B,"on")==0 || xr_strcmp(B,"yes")==0 || xr_strcmp(B,"true")==0 || xr_strcmp(B,"1")==0);}
 
 protected:
@@ -91,6 +94,7 @@ public:
 	virtual 	~CInifile		( );
     bool		save_as         ( const char* new_fname=nullptr );
 	void		save_as			(IWriter& writer, bool bcheck=false)const;
+	void        set_readonly(bool b){m_flags.set(eReadOnly,b);}
 	void		set_override_names(bool b){m_flags.set(eOverrideNames,b);}
 	void		save_at_end		(bool b){m_flags.set(eSaveAtEnd,b);}
 	const char*		fname			( ) const { return m_file_name; };
@@ -259,5 +263,8 @@ public:
 
 // Main configuration file
 extern XRCORE_API CInifile* pSettings;
+
+// Rereads system.ltx into pSettings. The previous instance is retired, not deleted. Returns false and keeps the old one on failure.
+XRCORE_API bool ReloadSystemSettings();
 
 #endif //__XR_INI_H__

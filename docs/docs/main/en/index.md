@@ -9,7 +9,7 @@ hero:
   actions:
     - theme: brand
       text: Documentation
-      link: /en/main/getting-started
+      link: /en/main/documentation
     - theme: alt
       text: GitHub
       link: https://github.com/ixray-team/ixray-1.6-stcop
@@ -21,7 +21,7 @@ hero:
       link: https://t.me/ixray_platform
 
 heroVideo:
-  url: https://www.youtube.com/watch?v=XPe_rKGrO6Y
+  url: https://www.youtube.com/watch?v=AS8tWao9t0A
   title: IX-Ray Platform Overview
 
 features:

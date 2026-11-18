@@ -12,14 +12,33 @@
 
 using namespace luabind;
 
-CScriptIniFile *get_system_ini()
+extern XRCORE_API xr_hash_map<xr_string, CInifile*>* cached_ini_map;
+
+namespace
 {
-	return	((CScriptIniFile*)pSettings);
+	CScriptIniFile* GetCachedIni(const char* Name)
+	{
+		if (const auto Iter = cached_ini_map->find(Name); Iter != cached_ini_map->end())
+		{
+			return static_cast<CScriptIniFile*>(Iter->second);
+		}
+
+		auto* Ini = new CScriptIniFile(Name);
+		cached_ini_map->emplace(Name, Ini);
+		return Ini;
+	}
+}
+
+CScriptIniFile* get_system_ini()
+{
+	static CScriptIniFile Ini(+[]() { return pSettings; });
+	return pSettings ? &Ini : nullptr;
 }
 
 CScriptIniFile* get_external_ini()
 {
-	return	((CScriptIniFile*)EngineExternal().GetIniFile());
+	static CScriptIniFile Ini(+[]() { return EngineExternal().GetIniFile(); });
+	return EngineExternal().GetIniFile() ? &Ini : nullptr;
 }
 
 bool is_cop()
@@ -39,17 +58,21 @@ bool is_soc()
 
 CScriptIniFile* reload_system_ini()
 {
-	pSettings->Destroy(const_cast<CInifile*>(pSettings));
-	string_path fname;
-	FS.update_path(fname, _game_config_, "system.ltx");
-	pSettings = new CInifile(fname);
-	return	((CScriptIniFile*)pSettings);
+	ReloadSystemSettings();
+	return get_system_ini();
+}
+
+CScriptIniFile* reload_external_ini()
+{
+	EngineExternal().Reload();
+	return get_external_ini();
 }
 
 #ifdef XRGAME_EXPORTS
 CScriptIniFile *get_game_ini()
 {
-	return	((CScriptIniFile*)pGameIni);
+	static CScriptIniFile Ini(+[]() { return pGameIni; });
+	return pGameIni ? &Ini : nullptr;
 }
 #endif // XRGAME_EXPORTS
 
@@ -62,7 +85,7 @@ bool r_line(CScriptIniFile* self_, const char* S, int L, luabind::internal_strin
 	V = "";
 
 	const char* n, * v;
-	bool			result_ = !!self_->r_line(S, L, &n, &v);
+	bool			result_ = !!self_->GetIni().r_line(S, L, &n, &v);
 	if (!result_)
 		return		(false);
 
@@ -81,19 +104,13 @@ SCRIPTS_API CScriptIniFile *create_ini_file	(const char* ini_string)
 		xr_strlen(ini_string)
 	);
 
-	return			(
-		(CScriptIniFile*)
-		new CInifile(
-			&temp,
-			FS.get_path(_game_config_)->m_Path
-		)
-	);
+	return new CScriptIniFile(&temp, FS.get_path(_game_config_)->m_Path);
 }
 #pragma warning(pop)
 
 void section_for_each(CScriptIniFile* self, luabind::functor<bool> functor)
 {
-	CInifile::Root& sections = self->sections();
+	CInifile::Root& sections = self->GetIni().sections();
 	for (CInifile::Sect& sect : sections)
 	{
 		if (functor((const char*)sect.Name.c_str()))
@@ -166,11 +183,13 @@ void CScriptIniFile::script_register(lua_State *L)
 		def("system_ini",			&get_system_ini),
 		def("external_ini",			&get_external_ini),
 		def("reload_system_ini",	&reload_system_ini),
+		def("reload_external_ini",	&reload_external_ini),
 		def("create_ini",			&create_ini),
 		def("read_ini",				&read_ini),
 #ifdef XRGAME_EXPORTS
 		def("game_ini",				&get_game_ini),
 #endif // XRGAME_EXPORTS
+		def("get_cached_ini", &GetCachedIni),
 		def("create_ini_file",		&create_ini_file,	adopt<0>())
 	];
 }

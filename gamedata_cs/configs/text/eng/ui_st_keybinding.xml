@@ -175,22 +175,22 @@
 		<text>Vote "No"</text>
 	</string>
 	<string id="kb_weapon1">
-		<text>Weapon 1</text>
+		<text>Melee weapon</text>
 	</string>
 	<string id="kb_weapon2">
-		<text>Weapon 2</text>
+		<text>Secondary weapon</text>
 	</string>
 	<string id="kb_weapon3">
-		<text>Weapon 3</text>
+		<text>Primary weapon</text>
 	</string>
 	<string id="kb_weapon4">
-		<text>Weapon 4</text>
+		<text>Grenades</text>
 	</string>
 	<string id="kb_weapon5">
-		<text>Weapon 5</text>
+		<text>Binoculars</text>
 	</string>
 	<string id="kb_weapon6">
-		<text>Weapon 6</text>
+		<text>Bolts</text>
 	</string>
 	<string id="kb_wpn_next">
 		<text>Change ammo type</text>
@@ -209,5 +209,20 @@
 	</string>
 	<string id="kb_detector">
 		<text>Detector</text>
+	</string>
+	<string id="kb_mouse_left">
+		<text>LMB</text>
+	</string>
+	<string id="kb_mouse_right">
+		<text>RMB</text>
+	</string>
+	<string id="kb_mouse_middle">
+		<text>MMB</text>
+	</string>
+	<string id="kb_mouse_4">
+		<text>Mouse 4</text>
+	</string>
+	<string id="kb_mouse_5">
+		<text>Mouse 5</text>
 	</string>
 </string_table>

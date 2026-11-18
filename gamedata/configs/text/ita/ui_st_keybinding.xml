@@ -178,22 +178,25 @@
 		<text>Vota "Sì"</text>
 	</string>
 	<string id="kb_weapon1">
-		<text>Arma 1</text>
+		<text>Arma da mischia</text>
 	</string>
 	<string id="kb_weapon2">
-		<text>Arma 2</text>
+		<text>Arma secondaria</text>
 	</string>
 	<string id="kb_weapon3">
-		<text>Arma 3</text>
+		<text>Arma principale</text>
 	</string>
 	<string id="kb_weapon4">
-		<text>Arma 4</text>
+		<text>Granate</text>
 	</string>
 	<string id="kb_weapon5">
-		<text>Arma 5</text>
+		<text>Binocolo</text>
 	</string>
 	<string id="kb_weapon6">
-		<text>Arma 6</text>
+		<text>Bulloni</text>
+	</string>
+	<string id="kb_weapon7">
+		<text>Pistola</text>
 	</string>
 	<string id="kb_wpn_next">
 		<text>Modifica tipo di munizioni</text>
@@ -221,5 +224,20 @@
 	</string>
 	<string id="kb_quick_use_4">
 		<text>Slot rapido 4</text>
+	</string>
+	<string id="kb_mouse_left">
+		<text>Mouse SX</text>
+	</string>
+	<string id="kb_mouse_right">
+		<text>Mouse DX</text>
+	</string>
+	<string id="kb_mouse_middle">
+		<text>Mouse centrale</text>
+	</string>
+	<string id="kb_mouse_4">
+		<text>Mouse 4</text>
+	</string>
+	<string id="kb_mouse_5">
+		<text>Mouse 5</text>
 	</string>
 </string_table>

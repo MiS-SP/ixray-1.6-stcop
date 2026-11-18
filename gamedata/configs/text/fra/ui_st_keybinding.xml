@@ -178,22 +178,25 @@
 		<text>Voter "Oui"</text>
 	</string>
 	<string id="kb_weapon1">
-		<text>Arme 1</text>
+		<text>Arme de mêlée</text>
 	</string>
 	<string id="kb_weapon2">
-		<text>Arme 2</text>
+		<text>Arme secondaire</text>
 	</string>
 	<string id="kb_weapon3">
-		<text>Arme 3</text>
+		<text>Arme principale</text>
 	</string>
 	<string id="kb_weapon4">
-		<text>Arme 4</text>
+		<text>Grenades</text>
 	</string>
 	<string id="kb_weapon5">
-		<text>Arme 5</text>
+		<text>Jumelles</text>
 	</string>
 	<string id="kb_weapon6">
-		<text>Arme 6</text>
+		<text>Boulons</text>
+	</string>
+	<string id="kb_weapon7">
+		<text>Pistolet</text>
 	</string>
 	<string id="kb_wpn_next">
 		<text>Changer de type de munitions</text>
@@ -221,5 +224,20 @@
 	</string>
 	<string id="kb_quick_use_4">
 		<text>Emplacement d'accès rapide 4</text>
+	</string>
+	<string id="kb_mouse_left">
+		<text>Clic gauche</text>
+	</string>
+	<string id="kb_mouse_right">
+		<text>Clic droit</text>
+	</string>
+	<string id="kb_mouse_middle">
+		<text>Clic milieu</text>
+	</string>
+	<string id="kb_mouse_4">
+		<text>Souris 4</text>
+	</string>
+	<string id="kb_mouse_5">
+		<text>Souris 5</text>
 	</string>
 </string_table>
